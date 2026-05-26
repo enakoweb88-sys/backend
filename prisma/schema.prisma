@@ -1,0 +1,318 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RoleName {
+  CEO
+  MANAGER
+  EMPLOYEE
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  BLOCKED
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MealStatus {
+  ATE
+  DID_NOT_EAT
+  DISPUTED
+}
+
+enum TransactionStatus {
+  PENDING
+  SETTLED
+  FLAGGED
+  FAILED
+}
+
+enum KycStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  INFO
+  TASK
+  KYC
+  EXPENSE
+  MEAL
+  ANNOUNCEMENT
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        RoleName @unique
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  goals     Goal[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("departments")
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  email                String               @unique
+  passwordHash          String
+  fullName             String
+  phone                String?
+  title                String?
+  status               UserStatus           @default(ACTIVE)
+  roleId               String
+  departmentId          String?
+  lastLoginAt           DateTime?
+  role                 Role                 @relation(fields: [roleId], references: [id])
+  department           Department?          @relation(fields: [departmentId], references: [id])
+  assignedTasks         Task[]               @relation("AssignedTasks")
+  createdTasks          Task[]               @relation("CreatedTasks")
+  expenses              Expense[]
+  mealRecords           MealRecord[]
+  sentMessages          Message[]            @relation("SentMessages")
+  notifications         Notification[]
+  announcements         Announcement[]
+  performanceMetrics    PerformanceMetric[]
+  reviewedKyc           KycSubmission[]      @relation("ReviewedKyc")
+  approvedKyc           KycSubmission[]      @relation("ApprovedKyc")
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    String     @default("Normal")
+  dueDate     DateTime?
+  assigneeId  String?
+  creatorId   String
+  assignee    User?      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creator     User       @relation("CreatedTasks", fields: [creatorId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status])
+  @@index([assigneeId])
+  @@map("tasks")
+}
+
+model Expense {
+  id          String        @id @default(cuid())
+  description String
+  amount      Decimal       @db.Decimal(14, 2)
+  currency    String        @default("XAF")
+  category    String
+  status      ExpenseStatus @default(PENDING)
+  receiptUrl  String?
+  submittedById String
+  submittedBy User          @relation(fields: [submittedById], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@map("expenses")
+}
+
+model MealRecord {
+  id              String     @id @default(cuid())
+  employeeId      String
+  date            DateTime
+  status          MealStatus
+  totalAmount     Decimal    @default(1000) @db.Decimal(14, 2)
+  companyAmount   Decimal    @default(500) @db.Decimal(14, 2)
+  employeeAmount  Decimal    @default(500) @db.Decimal(14, 2)
+  disputeReason   String?
+  employee        User       @relation(fields: [employeeId], references: [id])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([employeeId, date])
+  @@map("meal_records")
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  reference   String            @unique
+  entity      String
+  amount      Decimal           @db.Decimal(14, 2)
+  currency    String            @default("XAF")
+  type        String
+  status      TransactionStatus @default(PENDING)
+  proofUrl    String?
+  settledAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status])
+  @@map("transactions")
+}
+
+model KycSubmission {
+  id             String        @id @default(cuid())
+  applicantType  String
+  applicantName  String
+  email          String?
+  phone          String?
+  payload        Json
+  status         KycStatus     @default(PENDING)
+  rejectionReason String?
+  reviewedById   String?
+  approvedById   String?
+  reviewedAt     DateTime?
+  approvedAt     DateTime?
+  reviewedBy     User?         @relation("ReviewedKyc", fields: [reviewedById], references: [id])
+  approvedBy     User?         @relation("ApprovedKyc", fields: [approvedById], references: [id])
+  documents      KycDocument[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status])
+  @@map("kyc_submissions")
+}
+
+model KycDocument {
+  id              String        @id @default(cuid())
+  submissionId    String
+  documentType    String
+  fileName        String
+  fileUrl         String
+  mimeType        String?
+  submission      KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@map("kyc_documents")
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  tag         String?
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      NotificationType @default(INFO)
+  readAt    DateTime?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  channel   String
+  content   String
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([channel, createdAt])
+  @@map("messages")
+}
+
+model Goal {
+  id           String       @id @default(cuid())
+  title        String
+  description  String?
+  targetValue  Decimal?     @db.Decimal(14, 2)
+  currentValue Decimal?     @default(0) @db.Decimal(14, 2)
+  unit         String?
+  departmentId String?
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("goals")
+}
+
+model PerformanceMetric {
+  id        String   @id @default(cuid())
+  userId    String
+  metric    String
+  value     Decimal  @db.Decimal(14, 2)
+  period    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, period])
+  @@map("performance_metrics")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
