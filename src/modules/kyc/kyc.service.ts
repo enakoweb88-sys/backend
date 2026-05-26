@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { KycStatus, RoleName } from '@prisma/client';
+import { KycStatus, RoleName, Prisma } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,7 +22,7 @@ export class KycService {
         applicantName: body.applicantName,
         email: body.email,
         phone: body.phone,
-        payload: body.payload,
+        payload: body.payload as Prisma.InputJsonValue,
         documents: body.documents?.length ? { create: body.documents } : undefined,
       },
       include: { documents: true },
