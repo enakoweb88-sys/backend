@@ -4,12 +4,14 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+
+# Install all dependencies (including dev) for building
 RUN npm ci
 
 COPY . .
 
-RUN npm run prisma:generate
-RUN npm run build
+# Generate Prisma client and build the app
+RUN npm run prisma:generate && npm run build
 
 # Production stage
 FROM node:20-alpine
@@ -17,16 +19,18 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
 
-RUN npm install -g prisma
+# Install production dependencies only
+RUN npm ci --omit=dev
 
+# Copy Prisma files and built application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 5000
 
 ENV NODE_ENV=production
 
+# Run migrations and start the app
 CMD ["sh", "-c", "npm run prisma:deploy && npm run start:prod"]
