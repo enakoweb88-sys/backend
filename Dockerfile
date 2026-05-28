@@ -1,6 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
 RUN npm install
 
@@ -14,6 +16,8 @@ RUN ls -la /app/dist && echo "BUILD SUCCESS" || (echo "BUILD FAILED - dist is em
 
 FROM node:20-alpine
 WORKDIR /app
+
+RUN apk add --no-cache openssl
 
 COPY package*.json ./
 RUN npm install --omit=dev
