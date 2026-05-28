@@ -1,7 +1,6 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { RoleName, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto';
@@ -19,7 +18,7 @@ export class AuthService {
       where: { email: dto.email.toLowerCase() },
       include: { role: true, department: true },
     });
-    if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Invalid credentials');
     if (user.role.name !== dto.role) throw new ForbiddenException('This account is not assigned to the selected role');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
@@ -28,10 +27,7 @@ export class AuthService {
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const tokens = await this.issueTokens(user.id, user.email, user.role.name);
 
-    return {
-      user: this.publicUser(user),
-      ...tokens,
-    };
+    return { user: this.publicUser(user), ...tokens };
   }
 
   async refresh(refreshToken: string) {
@@ -46,9 +42,7 @@ export class AuthService {
       await Promise.all(candidates.map(async token => ((await bcrypt.compare(refreshToken, token.tokenHash)) ? token : null)))
     ).find(Boolean);
 
-    if (!tokenRecord) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
+    if (!tokenRecord) throw new UnauthorizedException('Invalid refresh token');
 
     return {
       user: this.publicUser(tokenRecord.user),
@@ -64,7 +58,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async issueTokens(userId: string, email: string, role: RoleName) {
+  private async issueTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
@@ -86,7 +80,13 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  private publicUser(user: { id: string; email: string; fullName: string; role: { name: RoleName }; department?: { name: string } | null }) {
+  private publicUser(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: { name: string };
+    department?: { name: string } | null;
+  }) {
     return {
       id: user.id,
       email: user.email,

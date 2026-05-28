@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { RoleName } from '@prisma/client';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
@@ -21,7 +20,7 @@ export class AnnouncementsController {
   }
 
   @Post()
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   create(@Body() body: { title: string; content: string; tag?: string }, @CurrentUser() user: JwtUser) {
     return this.prisma.announcement.create({
       data: { title: body.title, content: body.content, tag: body.tag, authorId: user.sub },

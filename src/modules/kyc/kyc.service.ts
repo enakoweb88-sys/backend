@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { KycStatus, RoleName, Prisma } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,17 +21,17 @@ export class KycService {
         applicantName: body.applicantName,
         email: body.email,
         phone: body.phone,
-        payload: body.payload as Prisma.InputJsonValue,
+        payload: body.payload as any,
         documents: body.documents?.length ? { create: body.documents } : undefined,
       },
       include: { documents: true },
     });
   }
 
-  list(query: QueryDto & { status?: KycStatus }) {
+  list(query: QueryDto & { status?: string }) {
     return this.prisma.kycSubmission.findMany({
       where: {
-        status: query.status,
+        ...(query.status ? { status: query.status as any } : {}),
         ...(query.search
           ? {
               OR: [
@@ -42,23 +41,26 @@ export class KycService {
             }
           : {}),
       },
-      include: { documents: true, reviewedBy: { select: { fullName: true } }, approvedBy: { select: { fullName: true } } },
+      include: {
+        documents: true,
+        reviewedBy: { select: { fullName: true } },
+        approvedBy: { select: { fullName: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: query.limit ?? 50,
     });
   }
 
   async review(id: string, dto: KycReviewDto, user: JwtUser) {
-    const approved = dto.status === KycStatus.APPROVED && user.role === RoleName.CEO;
+    const approved = dto.status === 'APPROVED' && user.role === 'CEO';
     return this.prisma.kycSubmission.update({
       where: { id },
       data: {
-        status: dto.status as KycStatus,
+        status: dto.status as any,
         rejectionReason: dto.rejectionReason,
         reviewedById: user.sub,
         reviewedAt: new Date(),
-        approvedById: approved ? user.sub : undefined,
-        approvedAt: approved ? new Date() : undefined,
+        ...(approved ? { approvedById: user.sub, approvedAt: new Date() } : {}),
       },
       include: { documents: true },
     });

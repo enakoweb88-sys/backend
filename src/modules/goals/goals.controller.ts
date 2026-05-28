@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { RoleName } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
@@ -16,7 +15,7 @@ export class GoalsController {
   }
 
   @Post()
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   create(@Body() body: { title: string; description?: string; targetValue?: number; unit?: string; dueDate?: string }) {
     return this.prisma.goal.create({
       data: {

@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { RoleName, TaskStatus } from '@prisma/client';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -18,13 +17,13 @@ export class TasksController {
   }
 
   @Post()
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: JwtUser) {
     return this.tasks.create(dto, user);
   }
 
   @Patch(':id/status/:status')
-  setStatus(@Param('id') id: string, @Param('status') status: TaskStatus) {
-    return this.tasks.setStatus(id, status);
+  setStatus(@Param('id') id: string, @Param('status') status: string) {
+    return this.tasks.setStatus(id, status as any);
   }
 }

@@ -1,5 +1,10 @@
-import { RoleName } from '@prisma/client';
 import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
+
+enum RoleName {
+  CEO = 'CEO',
+  MANAGER = 'MANAGER',
+  EMPLOYEE = 'EMPLOYEE',
+}
 
 export class LoginDto {
   @IsEmail()
@@ -10,7 +15,7 @@ export class LoginDto {
   password!: string;
 
   @IsEnum(RoleName)
-  role!: RoleName;
+  role!: string;
 }
 
 export class RefreshDto {

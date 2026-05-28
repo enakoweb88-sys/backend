@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ExpenseStatus, KycStatus, MealStatus, TransactionStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -18,15 +17,19 @@ export class AnalyticsService {
       mealTotals,
       openTasks,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
-      this.prisma.user.count({ where: { status: UserStatus.SUSPENDED } }),
-      this.prisma.transaction.aggregate({ where: { status: TransactionStatus.SETTLED }, _sum: { amount: true }, _count: true }),
-      this.prisma.transaction.aggregate({ where: { status: TransactionStatus.PENDING }, _sum: { amount: true }, _count: true }),
-      this.prisma.expense.aggregate({ where: { status: ExpenseStatus.APPROVED }, _sum: { amount: true }, _count: true }),
-      this.prisma.kycSubmission.count({ where: { status: { in: [KycStatus.PENDING, KycStatus.UNDER_REVIEW] } } }),
-      this.prisma.kycSubmission.count({ where: { status: KycStatus.APPROVED } }),
-      this.prisma.mealRecord.aggregate({ where: { status: MealStatus.ATE }, _sum: { totalAmount: true, companyAmount: true, employeeAmount: true }, _count: true }),
-      this.prisma.task.count({ where: { status: { not: 'DONE' } } }),
+      this.prisma.user.count({ where: { status: 'ACTIVE' as any } }),
+      this.prisma.user.count({ where: { status: 'SUSPENDED' as any } }),
+      this.prisma.transaction.aggregate({ where: { status: 'SETTLED' as any }, _sum: { amount: true }, _count: true }),
+      this.prisma.transaction.aggregate({ where: { status: 'PENDING' as any }, _sum: { amount: true }, _count: true }),
+      this.prisma.expense.aggregate({ where: { status: 'APPROVED' as any }, _sum: { amount: true }, _count: true }),
+      this.prisma.kycSubmission.count({ where: { status: { in: ['PENDING', 'UNDER_REVIEW'] as any[] } } }),
+      this.prisma.kycSubmission.count({ where: { status: 'APPROVED' as any } }),
+      this.prisma.mealRecord.aggregate({
+        where: { status: 'ATE' as any },
+        _sum: { totalAmount: true, companyAmount: true, employeeAmount: true },
+        _count: true,
+      }),
+      this.prisma.task.count({ where: { status: { not: 'DONE' as any } } }),
     ]);
 
     return {

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ExpenseStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { MoneyDto, QueryDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +8,7 @@ export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: QueryDto, user: JwtUser) {
-    const where = user.role === RoleName.EMPLOYEE ? { submittedById: user.sub } : {};
+    const where = user.role === 'EMPLOYEE' ? { submittedById: user.sub } : {};
     const items = await this.prisma.expense.findMany({
       where,
       include: { submittedBy: { select: { fullName: true, email: true } } },
@@ -37,7 +36,7 @@ export class ExpensesService {
     });
   }
 
-  review(id: string, status: ExpenseStatus) {
+  review(id: string, status: any) {
     return this.prisma.expense.update({ where: { id }, data: { status } });
   }
 }

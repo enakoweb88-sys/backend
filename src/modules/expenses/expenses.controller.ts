@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ExpenseStatus, RoleName } from '@prisma/client';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { MoneyDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -22,15 +21,21 @@ export class ExpensesController {
     return this.expenses.create(dto, user);
   }
 
+  @Patch(':id/review/:status')
+  @Roles('CEO', 'MANAGER')
+  review(@Param('id') id: string, @Param('status') status: string) {
+    return this.expenses.review(id, status as any);
+  }
+
   @Patch(':id/approve')
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   approve(@Param('id') id: string) {
-    return this.expenses.review(id, ExpenseStatus.APPROVED);
+    return this.expenses.review(id, 'APPROVED' as any);
   }
 
   @Patch(':id/reject')
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   reject(@Param('id') id: string) {
-    return this.expenses.review(id, ExpenseStatus.REJECTED);
+    return this.expenses.review(id, 'REJECTED' as any);
   }
 }

@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { RoleName } from '@prisma/client';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -18,7 +17,7 @@ export class MealsController {
   }
 
   @Post()
-  @Roles(RoleName.CEO, RoleName.MANAGER)
+  @Roles('CEO', 'MANAGER')
   record(@Body() dto: MealDto) {
     return this.meals.record(dto);
   }

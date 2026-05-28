@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { RoleName, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateEmployeeDto, QueryDto, UpdateEmployeeDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,13 +22,13 @@ export class EmployeesService {
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
-        where: { ...where, status: { not: UserStatus.DELETED } },
+        where: { ...where, status: { not: 'DELETED' as any } },
         include: { role: true, department: true },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.user.count({ where: { ...where, status: { not: UserStatus.DELETED } } }),
+      this.prisma.user.count({ where: { ...where, status: { not: 'DELETED' as any } } }),
     ]);
 
     return { items: items.map(this.toEmployee), total, page, limit };
@@ -37,9 +36,9 @@ export class EmployeesService {
 
   async create(dto: CreateEmployeeDto) {
     const role = await this.prisma.role.upsert({
-      where: { name: dto.role },
+      where: { name: dto.role as any },
       update: {},
-      create: { name: dto.role },
+      create: { name: dto.role as any },
     });
     const department = dto.department
       ? await this.prisma.department.upsert({ where: { name: dto.department }, update: {}, create: { name: dto.department } })
@@ -65,7 +64,7 @@ export class EmployeesService {
     if (!existing) throw new NotFoundException('Employee not found');
 
     const role = dto.role
-      ? await this.prisma.role.upsert({ where: { name: dto.role }, update: {}, create: { name: dto.role } })
+      ? await this.prisma.role.upsert({ where: { name: dto.role as any }, update: {}, create: { name: dto.role as any } })
       : null;
     const department = dto.department
       ? await this.prisma.department.upsert({ where: { name: dto.department }, update: {}, create: { name: dto.department } })
@@ -77,46 +76,28 @@ export class EmployeesService {
         fullName: dto.fullName,
         phone: dto.phone,
         title: dto.title,
-        roleId: role?.id,
-        departmentId: department?.id,
+        ...(role ? { roleId: role.id } : {}),
+        ...(department ? { departmentId: department.id } : {}),
       },
       include: { role: true, department: true },
     });
     return this.toEmployee(user);
   }
 
-  async suspend(id: string) {
-    return this.setStatus(id, UserStatus.SUSPENDED);
-  }
+  suspend(id: string) { return this.setStatus(id, 'SUSPENDED'); }
+  activate(id: string) { return this.setStatus(id, 'ACTIVE'); }
+  remove(id: string) { return this.setStatus(id, 'DELETED'); }
 
-  async activate(id: string) {
-    return this.setStatus(id, UserStatus.ACTIVE);
-  }
-
-  async remove(id: string) {
-    return this.setStatus(id, UserStatus.DELETED);
-  }
-
-  private async setStatus(id: string, status: UserStatus) {
+  private async setStatus(id: string, status: string) {
     const user = await this.prisma.user.update({
       where: { id },
-      data: { status },
+      data: { status: status as any },
       include: { role: true, department: true },
     });
     return this.toEmployee(user);
   }
 
-  private toEmployee(user: {
-    id: string;
-    email: string;
-    fullName: string;
-    phone: string | null;
-    title: string | null;
-    status: UserStatus;
-    createdAt: Date;
-    role: { name: RoleName };
-    department: { name: string } | null;
-  }) {
+  private toEmployee(user: any) {
     return {
       id: user.id,
       email: user.email,

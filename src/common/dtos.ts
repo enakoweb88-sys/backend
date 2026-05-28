@@ -1,6 +1,12 @@
-import { RoleName } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+
+// Mirror of Prisma RoleName — avoids dependency on generated client at compile time
+export enum RoleName {
+  CEO = 'CEO',
+  MANAGER = 'MANAGER',
+  EMPLOYEE = 'EMPLOYEE',
+}
 
 export class QueryDto {
   @IsOptional()
