@@ -6,7 +6,7 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache openssl libc6-compat python3 make g++
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Install all dependencies (including dev) for building
 RUN npm ci
@@ -24,7 +24,7 @@ WORKDIR /app
 # Install runtime dependencies - critical for Prisma
 RUN apk add --no-cache openssl libc6-compat
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Install production dependencies only
 RUN npm ci --omit=dev
