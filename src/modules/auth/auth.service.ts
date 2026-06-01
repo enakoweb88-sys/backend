@@ -39,7 +39,7 @@ export class AuthService {
     });
 
     const tokenRecord = (
-      await Promise.all(candidates.map(async token => ((await bcrypt.compare(refreshToken, token.tokenHash)) ? token : null)))
+      await Promise.all(candidates.map(async (token: typeof candidates[number]) => ((await bcrypt.compare(refreshToken, token.tokenHash)) ? token : null)))
     ).find(Boolean);
 
     if (!tokenRecord) throw new UnauthorizedException('Invalid refresh token');

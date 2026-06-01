@@ -8,7 +8,11 @@ RUN npm install
 
 COPY . .
 
-RUN npx prisma generate
+# Create a temporary .env for build time (Prisma generation only)
+RUN echo "DATABASE_URL=postgresql://user:password@localhost:5432/db" > .env && \
+    echo "DIRECT_URL=postgresql://user:password@localhost:5432/db" >> .env && \
+    npx prisma generate && \
+    rm .env
 
 RUN npm run build
 
