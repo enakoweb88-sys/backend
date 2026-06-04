@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { MealStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
-import { MealStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -27,11 +27,11 @@ export class MealsService {
   record(dto: MealDto) {
     return this.prisma.mealRecord.upsert({
       where: { employeeId_date: { employeeId: dto.employeeId, date: new Date(dto.date) } },
-      update: { status: dto.status as any },
+      update: { status: dto.status as MealStatus },
       create: {
         employeeId: dto.employeeId,
         date: new Date(dto.date),
-        status: dto.status as any,
+        status: dto.status as MealStatus,
         totalAmount: 1000,
         companyAmount: 500,
         employeeAmount: 500,
@@ -42,7 +42,7 @@ export class MealsService {
   dispute(id: string, reason: string) {
     return this.prisma.mealRecord.update({
       where: { id },
-      data: { status: 'DISPUTED' as any, disputeReason: reason },
+      data: { status: MealStatus.DISPUTED, disputeReason: reason },
     });
   }
 }

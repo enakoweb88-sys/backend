@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UserStatus, TaskStatus, ExpenseStatus, KycStatus, MealStatus, TransactionStatus } from '../../enums';
+import { ExpenseStatus, KycStatus, MealStatus, TaskStatus, TransactionStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -23,14 +23,14 @@ export class AnalyticsService {
       this.prisma.transaction.aggregate({ where: { status: TransactionStatus.SETTLED }, _sum: { amount: true }, _count: true }),
       this.prisma.transaction.aggregate({ where: { status: TransactionStatus.PENDING }, _sum: { amount: true }, _count: true }),
       this.prisma.expense.aggregate({ where: { status: ExpenseStatus.APPROVED }, _sum: { amount: true }, _count: true }),
-      this.prisma.kycSubmission.count({ where: { status: { in: [KycStatus.UNDER_REVIEW, KycStatus.APPROVED] as any[] } } }),
+      this.prisma.kycSubmission.count({ where: { status: { in: [KycStatus.PENDING, KycStatus.UNDER_REVIEW] } } }),
       this.prisma.kycSubmission.count({ where: { status: KycStatus.APPROVED } }),
       this.prisma.mealRecord.aggregate({
         where: { status: MealStatus.ATE },
         _sum: { totalAmount: true, companyAmount: true, employeeAmount: true },
         _count: true,
       }),
-      this.prisma.task.count({ where: { status: { not: TaskStatus.COMPLETED } } }),
+      this.prisma.task.count({ where: { status: { not: TaskStatus.DONE } } }),
     ]);
 
     return {

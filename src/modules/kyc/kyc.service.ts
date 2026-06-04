@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { KycStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
-import { KycStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

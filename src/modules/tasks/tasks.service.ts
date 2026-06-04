@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { RoleName, TaskStatus } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskDto } from '../../common/dtos';
-import { TaskStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { RoleName, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateEmployeeDto, QueryDto, UpdateEmployeeDto } from '../../common/dtos';
-import { UserStatus } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -37,9 +37,9 @@ export class EmployeesService {
 
   async create(dto: CreateEmployeeDto) {
     const role = await this.prisma.role.upsert({
-      where: { name: dto.role as any },
+      where: { name: dto.role as RoleName },
       update: {},
-      create: { name: dto.role as any },
+      create: { name: dto.role as RoleName },
     });
     const department = dto.department
       ? await this.prisma.department.upsert({ where: { name: dto.department }, update: {}, create: { name: dto.department } })
@@ -65,7 +65,7 @@ export class EmployeesService {
     if (!existing) throw new NotFoundException('Employee not found');
 
     const role = dto.role
-      ? await this.prisma.role.upsert({ where: { name: dto.role as any }, update: {}, create: { name: dto.role as any } })
+      ? await this.prisma.role.upsert({ where: { name: dto.role as RoleName }, update: {}, create: { name: dto.role as RoleName } })
       : null;
     const department = dto.department
       ? await this.prisma.department.upsert({ where: { name: dto.department }, update: {}, create: { name: dto.department } })
@@ -92,7 +92,7 @@ export class EmployeesService {
   private async setStatus(id: string, status: UserStatus) {
     const user = await this.prisma.user.update({
       where: { id },
-      data: { status: status as any },
+      data: { status },
       include: { role: true, department: true },
     });
     return this.toEmployee(user);
