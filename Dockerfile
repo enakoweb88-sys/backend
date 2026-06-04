@@ -8,15 +8,13 @@ RUN npm install
 
 COPY . .
 
-# Generate Prisma client with a dummy DB URL (only needed for type generation)
 RUN DATABASE_URL="postgresql://user:password@localhost:5432/db" \
     DIRECT_URL="postgresql://user:password@localhost:5432/db" \
     npx prisma generate
 
-# Compile TypeScript
-RUN npx nest build
+# Use tsc directly — more reliable in Docker than nest build
+RUN npx tsc -p tsconfig.build.json --outDir dist --noEmit false
 
-# Verify dist was created
 RUN ls -la /app/dist/main.js && echo "BUILD SUCCESS"
 
 # ── Final image ──────────────────────────────────────────
@@ -30,15 +28,12 @@ RUN npm install --omit=dev
 
 COPY prisma ./prisma
 
-# Regenerate Prisma client in production image
 RUN DATABASE_URL="postgresql://user:password@localhost:5432/db" \
     DIRECT_URL="postgresql://user:password@localhost:5432/db" \
     npx prisma generate
 
-# Copy compiled output from builder
 COPY --from=builder /app/dist ./dist
 
-# Verify dist exists in final image
 RUN ls -la /app/dist/main.js && echo "COPY SUCCESS"
 
 COPY start.sh ./start.sh
