@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { CreateEmployeeDto, QueryDto, UpdateEmployeeDto } from '../../common/dtos';
+import { UserStatus } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -22,13 +23,13 @@ export class EmployeesService {
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
-        where: { ...where, status: { not: 'DELETED' as any } },
+        where: { ...where, status: { not: UserStatus.DELETED } },
         include: { role: true, department: true },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.user.count({ where: { ...where, status: { not: 'DELETED' as any } } }),
+      this.prisma.user.count({ where: { ...where, status: { not: UserStatus.DELETED } } }),
     ]);
 
     return { items: items.map(this.toEmployee), total, page, limit };
@@ -84,11 +85,11 @@ export class EmployeesService {
     return this.toEmployee(user);
   }
 
-  suspend(id: string) { return this.setStatus(id, 'SUSPENDED'); }
-  activate(id: string) { return this.setStatus(id, 'ACTIVE'); }
-  remove(id: string) { return this.setStatus(id, 'DELETED'); }
+  suspend(id: string) { return this.setStatus(id, UserStatus.SUSPENDED); }
+  activate(id: string) { return this.setStatus(id, UserStatus.ACTIVE); }
+  remove(id: string) { return this.setStatus(id, UserStatus.DELETED); }
 
-  private async setStatus(id: string, status: string) {
+  private async setStatus(id: string, status: UserStatus) {
     const user = await this.prisma.user.update({
       where: { id },
       data: { status: status as any },

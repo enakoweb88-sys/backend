@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { UserStatus } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto';
 
@@ -18,7 +19,7 @@ export class AuthService {
       where: { email: dto.email.toLowerCase() },
       include: { role: true, department: true },
     });
-    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException('Invalid credentials');
     if (user.role.name !== dto.role) throw new ForbiddenException('This account is not assigned to the selected role');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);

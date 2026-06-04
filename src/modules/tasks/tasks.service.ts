@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskDto } from '../../common/dtos';
+import { TaskStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,7 +10,7 @@ export class TasksService {
 
   list(user: JwtUser) {
     return this.prisma.task.findMany({
-      where: user.role === 'EMPLOYEE' ? { assigneeId: user.sub } : {},
+      where: user.role === RoleName.EMPLOYEE ? { assigneeId: user.sub } : {},
       include: {
         assignee: { select: { id: true, fullName: true } },
         creator: { select: { id: true, fullName: true } },
@@ -31,7 +32,7 @@ export class TasksService {
     });
   }
 
-  setStatus(id: string, status: any) {
+  setStatus(id: string, status: TaskStatus) {
     return this.prisma.task.update({ where: { id }, data: { status } });
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
+import { KycStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -52,7 +53,7 @@ export class KycService {
   }
 
   async review(id: string, dto: KycReviewDto, user: JwtUser) {
-    const approved = dto.status === 'APPROVED' && user.role === 'CEO';
+    const approved = dto.status === KycStatus.APPROVED && user.role === RoleName.CEO;
     return this.prisma.kycSubmission.update({
       where: { id },
       data: {

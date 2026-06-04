@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
+import { MealStatus, RoleName } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -8,7 +9,7 @@ export class MealsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(user: JwtUser) {
-    const where = user.role === 'EMPLOYEE' ? { employeeId: user.sub } : {};
+    const where = user.role === RoleName.EMPLOYEE ? { employeeId: user.sub } : {};
     const items = await this.prisma.mealRecord.findMany({
       where,
       include: { employee: { select: { fullName: true, email: true } } },
@@ -16,7 +17,7 @@ export class MealsService {
       take: 100,
     });
     const totals = await this.prisma.mealRecord.aggregate({
-      where: { ...where, status: 'ATE' as any },
+      where: { ...where, status: MealStatus.ATE },
       _sum: { totalAmount: true, companyAmount: true, employeeAmount: true },
       _count: true,
     });

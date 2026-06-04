@@ -4,6 +4,7 @@ import { MoneyDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
+import { ExpenseStatus } from '../../enums';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -30,12 +31,12 @@ export class ExpensesController {
   @Patch(':id/approve')
   @Roles('CEO', 'MANAGER')
   approve(@Param('id') id: string) {
-    return this.expenses.review(id, 'APPROVED' as any);
+    return this.expenses.review(id, ExpenseStatus.APPROVED);
   }
 
   @Patch(':id/reject')
   @Roles('CEO', 'MANAGER')
   reject(@Param('id') id: string) {
-    return this.expenses.review(id, 'REJECTED' as any);
+    return this.expenses.review(id, ExpenseStatus.REJECTED);
   }
 }

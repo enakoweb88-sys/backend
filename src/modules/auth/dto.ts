@@ -1,10 +1,5 @@
 import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
-
-enum RoleName {
-  CEO = 'CEO',
-  MANAGER = 'MANAGER',
-  EMPLOYEE = 'EMPLOYEE',
-}
+import { RoleName } from '../../enums';
 
 export class LoginDto {
   @IsEmail()

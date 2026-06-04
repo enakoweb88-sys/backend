@@ -33,5 +33,8 @@ COPY --from=builder /app/dist ./dist
 
 RUN ls -la /app/dist && echo "COPY SUCCESS" || (echo "COPY FAILED - dist missing in final stage" && exit 1)
 
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
+CMD ["/app/start.sh"]

@@ -1,12 +1,9 @@
 import { Type } from 'class-transformer';
 import { IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { RoleName, MealStatus, KycStatus } from '../enums';
 
-// Mirror of Prisma RoleName — avoids dependency on generated client at compile time
-export enum RoleName {
-  CEO = 'CEO',
-  MANAGER = 'MANAGER',
-  EMPLOYEE = 'EMPLOYEE',
-}
+// Re-export enums for backward compatibility
+export { RoleName, MealStatus, KycStatus };
 
 export class QueryDto {
   @IsOptional()
@@ -119,13 +116,13 @@ export class MealDto {
   @IsDateString()
   date!: string;
 
-  @IsString()
-  status!: 'ATE' | 'DID_NOT_EAT';
+  @IsEnum(MealStatus)
+  status!: MealStatus;
 }
 
 export class KycReviewDto {
-  @IsString()
-  status!: 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  @IsEnum(KycStatus)
+  status!: KycStatus;
 
   @IsString()
   @IsOptional()

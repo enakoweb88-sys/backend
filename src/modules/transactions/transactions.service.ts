@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MoneyDto, QueryDto } from '../../common/dtos';
+import { TransactionStatus } from '../../enums';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -30,10 +31,10 @@ export class TransactionsService {
     });
   }
 
-  setStatus(id: string, status: any) {
+  setStatus(id: string, status: TransactionStatus) {
     return this.prisma.transaction.update({
       where: { id },
-      data: { status, settledAt: status === 'SETTLED' ? new Date() : undefined },
+      data: { status, settledAt: status === TransactionStatus.SETTLED ? new Date() : undefined },
     });
   }
 }
