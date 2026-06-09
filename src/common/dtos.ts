@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { RoleName, MealStatus, KycStatus } from '../enums';
+import { RoleName, MealStatus, KycStatus } from '@prisma/client';
 
 // Re-export enums for backward compatibility
 export { RoleName, MealStatus, KycStatus };

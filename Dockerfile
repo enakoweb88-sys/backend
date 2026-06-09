@@ -8,12 +8,13 @@ RUN npm install
 
 COPY . .
 
+# Generate Prisma client in builder stage
 RUN DATABASE_URL="postgresql://user:password@localhost:5432/db" \
     DIRECT_URL="postgresql://user:password@localhost:5432/db" \
     npx prisma generate
 
-# Use tsc directly — more reliable in Docker than nest build
-RUN npx tsc -p tsconfig.build.json --outDir dist --noEmit false
+# Compile TypeScript
+RUN npx tsc -p tsconfig.build.json
 
 RUN ls -la /app/dist/main.js && echo "BUILD SUCCESS"
 
@@ -39,5 +40,5 @@ RUN ls -la /app/dist/main.js && echo "COPY SUCCESS"
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 
-EXPOSE 3000
+EXPOSE 5000
 CMD ["./start.sh"]
