@@ -9,6 +9,8 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
 enum RoleName {
   CEO
   MANAGER
@@ -27,6 +29,13 @@ enum TaskStatus {
   REVIEW
   DONE
   BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }
 
 enum ExpenseStatus {
@@ -62,7 +71,23 @@ enum NotificationType {
   EXPENSE
   MEAL
   ANNOUNCEMENT
+  GOAL
+  PERFORMANCE
 }
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum GoalScope {
+  COMPANY
+  DEPARTMENT
+  PERSONAL
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
 
 model Role {
   id          String   @id @default(cuid())
@@ -87,100 +112,114 @@ model Department {
 }
 
 model User {
-  id                   String               @id @default(cuid())
-  email                String               @unique
-  passwordHash          String
-  fullName             String
-  phone                String?
-  title                String?
-  status               UserStatus           @default(ACTIVE)
-  roleId               String
-  departmentId          String?
-  lastLoginAt           DateTime?
-  role                 Role                 @relation(fields: [roleId], references: [id])
-  department           Department?          @relation(fields: [departmentId], references: [id])
-  assignedTasks         Task[]               @relation("AssignedTasks")
-  createdTasks          Task[]               @relation("CreatedTasks")
-  expenses              Expense[]
-  mealRecords           MealRecord[]
-  sentMessages          Message[]            @relation("SentMessages")
-  notifications         Notification[]
-  announcements         Announcement[]
-  performanceMetrics    PerformanceMetric[]
-  reviewedKyc           KycSubmission[]      @relation("ReviewedKyc")
-  approvedKyc           KycSubmission[]      @relation("ApprovedKyc")
-  refreshTokens         RefreshToken[]
-  auditLogs             AuditLog[]
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  passwordHash       String
+  fullName           String
+  phone              String?
+  title              String?
+  avatarUrl          String?
+  status             UserStatus          @default(ACTIVE)
+  roleId             String
+  departmentId       String?
+  lastLoginAt        DateTime?
+  role               Role                @relation(fields: [roleId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  assignedTasks      Task[]              @relation("AssignedTasks")
+  createdTasks       Task[]              @relation("CreatedTasks")
+  taskComments       TaskComment[]
+  expenses           Expense[]
+  mealRecords        MealRecord[]
+  sentMessages       Message[]           @relation("SentMessages")
+  notifications      Notification[]
+  announcements      Announcement[]
+  performanceMetrics PerformanceMetric[]
+  reviewedKyc        KycSubmission[]     @relation("ReviewedKyc")
+  approvedKyc        KycSubmission[]     @relation("ApprovedKyc")
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+  activityLogs       ActivityLog[]
+  documents          Document[]
+  goals              Goal[]              @relation("PersonalGoals")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
+  @@index([departmentId])
+  @@index([roleId])
   @@map("users")
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   tokenHash String
   userId    String
   expiresAt DateTime
   revokedAt DateTime?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@map("refresh_tokens")
 }
 
+// ─── Task Management ─────────────────────────────────────────────────────────
+
 model Task {
-  id          String     @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   description String?
-  status      TaskStatus @default(TODO)
-  priority    String     @default("Normal")
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(NORMAL)
   dueDate     DateTime?
   assigneeId  String?
   creatorId   String
-  assignee    User?      @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  creator     User       @relation("CreatedTasks", fields: [creatorId], references: [id])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  assignee    User?        @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creator     User         @relation("CreatedTasks", fields: [creatorId], references: [id])
+  comments    TaskComment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@index([status])
   @@index([assigneeId])
+  @@index([creatorId])
   @@map("tasks")
 }
 
-model Expense {
-  id          String        @id @default(cuid())
-  description String
-  amount      Decimal       @db.Decimal(14, 2)
-  currency    String        @default("XAF")
-  category    String
-  status      ExpenseStatus @default(PENDING)
-  receiptUrl  String?
-  submittedById String
-  submittedBy User          @relation(fields: [submittedById], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  content   String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([status])
-  @@map("expenses")
+  @@index([taskId])
+  @@index([authorId])
+  @@map("task_comments")
 }
 
-model MealRecord {
-  id              String     @id @default(cuid())
-  employeeId      String
-  date            DateTime
-  status          MealStatus
-  totalAmount     Decimal    @default(1000) @db.Decimal(14, 2)
-  companyAmount   Decimal    @default(500) @db.Decimal(14, 2)
-  employeeAmount  Decimal    @default(500) @db.Decimal(14, 2)
-  disputeReason   String?
-  employee        User       @relation(fields: [employeeId], references: [id])
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+// ─── Financial Models ─────────────────────────────────────────────────────────
 
-  @@unique([employeeId, date])
-  @@map("meal_records")
+model Expense {
+  id            String        @id @default(cuid())
+  description   String
+  amount        Decimal       @db.Decimal(14, 2)
+  currency      String        @default("XAF")
+  category      String
+  status        ExpenseStatus @default(PENDING)
+  receiptUrl    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  submittedById String
+  submittedBy   User          @relation(fields: [submittedById], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([submittedById])
+  @@map("expenses")
 }
 
 model Transaction {
@@ -191,6 +230,7 @@ model Transaction {
   currency    String            @default("XAF")
   type        String
   status      TransactionStatus @default(PENDING)
+  description String?
   proofUrl    String?
   settledAt   DateTime?
   createdAt   DateTime          @default(now())
@@ -200,52 +240,106 @@ model Transaction {
   @@map("transactions")
 }
 
+// ─── Meal Tracking ───────────────────────────────────────────────────────────
+
+model MealRecord {
+  id             String     @id @default(cuid())
+  employeeId     String
+  date           DateTime
+  status         MealStatus
+  totalAmount    Decimal    @default(1000) @db.Decimal(14, 2)
+  companyAmount  Decimal    @default(500) @db.Decimal(14, 2)
+  employeeAmount Decimal    @default(500) @db.Decimal(14, 2)
+  disputeReason  String?
+  employee       User       @relation(fields: [employeeId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@map("meal_records")
+}
+
+// ─── KYC ─────────────────────────────────────────────────────────────────────
+
 model KycSubmission {
-  id             String        @id @default(cuid())
-  applicantType  String
-  applicantName  String
-  email          String?
-  phone          String?
-  payload        Json
-  status         KycStatus     @default(PENDING)
+  id              String        @id @default(cuid())
+  applicantType   String
+  applicantName   String
+  email           String?
+  phone           String?
+  payload         Json
+  status          KycStatus     @default(PENDING)
   rejectionReason String?
-  reviewedById   String?
-  approvedById   String?
-  reviewedAt     DateTime?
-  approvedAt     DateTime?
-  reviewedBy     User?         @relation("ReviewedKyc", fields: [reviewedById], references: [id])
-  approvedBy     User?         @relation("ApprovedKyc", fields: [approvedById], references: [id])
-  documents      KycDocument[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  reviewedById    String?
+  approvedById    String?
+  reviewedAt      DateTime?
+  approvedAt      DateTime?
+  reviewedBy      User?         @relation("ReviewedKyc", fields: [reviewedById], references: [id])
+  approvedBy      User?         @relation("ApprovedKyc", fields: [approvedById], references: [id])
+  documents       KycDocument[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([status])
+  @@index([approvedById])
+  @@index([reviewedById])
   @@map("kyc_submissions")
 }
 
 model KycDocument {
-  id              String        @id @default(cuid())
-  submissionId    String
-  documentType    String
-  fileName        String
-  fileUrl         String
-  mimeType        String?
-  submission      KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  createdAt       DateTime      @default(now())
+  id           String        @id @default(cuid())
+  submissionId String
+  documentType String
+  fileName     String
+  fileUrl      String
+  mimeType     String?
+  submission   KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
 
+  @@index([submissionId])
   @@map("kyc_documents")
 }
 
-model Announcement {
-  id          String   @id @default(cuid())
-  title       String
-  content     String
-  tag         String?
-  authorId    String
-  author      User     @relation(fields: [authorId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ─── Goals ───────────────────────────────────────────────────────────────────
 
+model Goal {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  targetValue  Decimal?   @db.Decimal(14, 2)
+  currentValue Decimal?   @default(0) @db.Decimal(14, 2)
+  unit         String?
+  scope        GoalScope  @default(COMPANY)
+  status       GoalStatus @default(ACTIVE)
+  departmentId String?
+  ownerId      String?
+  dueDate      DateTime?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  owner        User?       @relation("PersonalGoals", fields: [ownerId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([scope, status])
+  @@index([departmentId])
+  @@index([ownerId])
+  @@map("goals")
+}
+
+// ─── Communications ───────────────────────────────────────────────────────────
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  tag       String?
+  pinned    Boolean  @default(false)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
   @@map("announcements")
 }
 
@@ -256,6 +350,7 @@ model Notification {
   body      String
   type      NotificationType @default(INFO)
   readAt    DateTime?
+  link      String?
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime         @default(now())
 
@@ -272,24 +367,11 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([channel, createdAt])
+  @@index([senderId])
   @@map("messages")
 }
 
-model Goal {
-  id           String       @id @default(cuid())
-  title        String
-  description  String?
-  targetValue  Decimal?     @db.Decimal(14, 2)
-  currentValue Decimal?     @default(0) @db.Decimal(14, 2)
-  unit         String?
-  departmentId String?
-  department   Department?  @relation(fields: [departmentId], references: [id])
-  dueDate      DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  @@map("goals")
-}
+// ─── Performance & Analytics ─────────────────────────────────────────────────
 
 model PerformanceMetric {
   id        String   @id @default(cuid())
@@ -297,12 +379,33 @@ model PerformanceMetric {
   metric    String
   value     Decimal  @db.Decimal(14, 2)
   period    String
+  notes     String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@index([userId, period])
   @@map("performance_metrics")
 }
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+
+model Document {
+  id           String   @id @default(cuid())
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  url          String
+  category     String   @default("general")
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([uploadedById])
+  @@map("documents")
+}
+
+// ─── Audit & Activity Logs ───────────────────────────────────────────────────
 
 model AuditLog {
   id        String   @id @default(cuid())
@@ -311,9 +414,26 @@ model AuditLog {
   entity    String
   entityId  String?
   metadata  Json?
+  ipAddress String?
   actor     User?    @relation(fields: [actorId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([actorId, createdAt])
+  @@index([entity, entityId])
   @@map("audit_logs")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  module    String
+  details   String?
+  ipAddress String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([module])
+  @@map("activity_logs")
 }
