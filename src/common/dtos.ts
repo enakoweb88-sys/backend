@@ -1,9 +1,23 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { RoleName, MealStatus, KycStatus } from '@prisma/client';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEmail,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+} from 'class-validator';
+import { RoleName, MealStatus, KycStatus, TaskPriority, GoalScope } from '@prisma/client';
 
 // Re-export enums for backward compatibility
-export { RoleName, MealStatus, KycStatus };
+export { RoleName, MealStatus, KycStatus, TaskPriority, GoalScope };
+
+// ─── Query / Pagination ───────────────────────────────────────────────────────
 
 export class QueryDto {
   @IsOptional()
@@ -21,7 +35,17 @@ export class QueryDto {
   @IsNumber()
   @Min(1)
   limit?: number = 25;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+// ─── Employees ────────────────────────────────────────────────────────────────
 
 export class CreateEmployeeDto {
   @IsString()
@@ -46,6 +70,7 @@ export class CreateEmployeeDto {
   department?: string;
 
   @IsString()
+  @MinLength(8)
   password!: string;
 }
 
@@ -71,6 +96,66 @@ export class UpdateEmployeeDto {
   department?: string;
 }
 
+// ─── Users (Self) ─────────────────────────────────────────────────────────────
+
+export class UpdateMeDto {
+  @IsString()
+  @IsOptional()
+  fullName?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+}
+
+// ─── Transactions ─────────────────────────────────────────────────────────────
+
+export class CreateTransactionDto {
+  @IsString()
+  entity!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  amount!: number;
+
+  @IsString()
+  @IsOptional()
+  currency?: string = 'XAF';
+
+  @IsString()
+  @IsOptional()
+  type?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+export class CreateExpenseDto {
+  @IsString()
+  description!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  amount!: number;
+
+  @IsString()
+  @IsOptional()
+  currency?: string = 'XAF';
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+}
+
+// ─── MoneyDto (backward compat) ──────────────────────────────────────────────
+
 export class MoneyDto {
   @IsString()
   description!: string;
@@ -86,7 +171,17 @@ export class MoneyDto {
   @IsString()
   @IsOptional()
   category?: string;
+
+  @IsString()
+  @IsOptional()
+  entity?: string;
+
+  @IsString()
+  @IsOptional()
+  type?: string;
 }
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
 
 export class CreateTaskDto {
   @IsString()
@@ -104,10 +199,39 @@ export class CreateTaskDto {
   @IsOptional()
   dueDate?: string;
 
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority = TaskPriority.NORMAL;
+}
+
+export class UpdateTaskDto {
   @IsString()
   @IsOptional()
-  priority?: string;
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  assigneeId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  dueDate?: string;
+
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority;
 }
+
+export class CreateTaskCommentDto {
+  @IsString()
+  content!: string;
+}
+
+// ─── Meals ────────────────────────────────────────────────────────────────────
 
 export class MealDto {
   @IsString()
@@ -120,6 +244,8 @@ export class MealDto {
   status!: MealStatus;
 }
 
+// ─── KYC ─────────────────────────────────────────────────────────────────────
+
 export class KycReviewDto {
   @IsEnum(KycStatus)
   status!: KycStatus;
@@ -127,4 +253,134 @@ export class KycReviewDto {
   @IsString()
   @IsOptional()
   rejectionReason?: string;
+}
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
+
+export class CreateGoalDto {
+  @IsString()
+  title!: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  targetValue?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  currentValue?: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsEnum(GoalScope)
+  @IsOptional()
+  scope?: GoalScope = GoalScope.COMPANY;
+
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  ownerId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  dueDate?: string;
+}
+
+export class UpdateGoalDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  targetValue?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  currentValue?: number;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsDateString()
+  @IsOptional()
+  dueDate?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: string;
+}
+
+// ─── Announcements ────────────────────────────────────────────────────────────
+
+export class CreateAnnouncementDto {
+  @IsString()
+  title!: string;
+
+  @IsString()
+  content!: string;
+
+  @IsString()
+  @IsOptional()
+  tag?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  pinned?: boolean = false;
+}
+
+export class UpdateAnnouncementDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  content?: string;
+
+  @IsString()
+  @IsOptional()
+  tag?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  pinned?: boolean;
+}
+
+// ─── Performance ─────────────────────────────────────────────────────────────
+
+export class CreatePerformanceMetricDto {
+  @IsString()
+  userId!: string;
+
+  @IsString()
+  metric!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  value!: number;
+
+  @IsString()
+  period!: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
