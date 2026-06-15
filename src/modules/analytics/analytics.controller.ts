@@ -11,4 +11,24 @@ export class AnalyticsController {
   overview() {
     return this.analytics.overview();
   }
+
+  @Get('health')
+  health() {
+    return this.analytics.healthScore();
+  }
+
+  @Get('marketing')
+  marketing() {
+    return this.analytics.marketingPerformance();
+  }
+
+  @Get('njangi')
+  njangi() {
+    return this.analytics.njangiAnalysis();
+  }
+
+  @Get('app')
+  appActivity() {
+    return this.analytics.appActivity();
+  }
 }

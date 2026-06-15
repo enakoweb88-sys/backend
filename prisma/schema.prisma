@@ -141,6 +141,7 @@ model User {
   activityLogs       ActivityLog[]
   documents          Document[]
   goals              Goal[]              @relation("PersonalGoals")
+  commissions        Commission[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -436,4 +437,191 @@ model ActivityLog {
   @@index([userId, createdAt])
   @@index([module])
   @@map("activity_logs")
+}
+
+// ─── Finance Additions ────────────────────────────────────────────────────────
+model BankAccount {
+  id        String   @id @default(cuid())
+  name      String
+  bank      String
+  accountNo String
+  balance   Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bank_accounts")
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  category  String
+  budget    Decimal  @db.Decimal(14, 2)
+  actual    Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  client    String
+  amount    Decimal  @db.Decimal(14, 2)
+  status    String   // 'Paid', 'Pending', 'Overdue'
+  dueDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invoices")
+}
+
+// ─── Analytics & Njangi Additions ───────────────────────────────────────────
+model AppActivity {
+  id        String   @id @default(cuid())
+  date      DateTime
+  downloads Int
+  active    Int
+  createdAt DateTime @default(now())
+
+  @@map("app_activities")
+}
+
+model MarketingChannel {
+  id        String   @id @default(cuid())
+  name      String
+  users     Int
+  total     Int
+  growth    Decimal  @db.Decimal(5, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("marketing_channels")
+}
+
+model NjangiGroup {
+  id        String   @id @default(cuid())
+  name      String
+  amount    Decimal  @db.Decimal(14, 2)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contributions NjangiContribution[]
+
+  @@map("njangi_groups")
+}
+
+model NjangiContribution {
+  id        String   @id @default(cuid())
+  groupId   String
+  amount    Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  group     NjangiGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("njangi_contributions")
+}
+
+// ─── BD Additions ─────────────────────────────────────────────────────────────
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  source    String
+  interest  String
+  status    String   // 'New', 'Contacted', 'Interested', 'KYC Sent', 'Active Client'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("leads")
+}
+
+model Meeting {
+  id        String   @id @default(cuid())
+  time      String   // Using string for mock simplicity (e.g., '10:00 AM')
+  person    String
+  type      String
+  status    String   // 'Confirmed', 'Pending'
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("meetings")
+}
+
+model Commission {
+  id        String   @id @default(cuid())
+  userId    String
+  total     Decimal  @db.Decimal(14, 2)
+  paid      Decimal  @db.Decimal(14, 2)
+  pending   Decimal  @db.Decimal(14, 2)
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("commissions")
+}
+
+// ─── Digital Additions ────────────────────────────────────────────────────────
+model ContentPost {
+  id        String   @id @default(cuid())
+  title     String
+  platform  String
+  type      String   // 'Posts', 'Reels', 'Videos'
+  status    String   // 'Pending', 'Approved', 'To Do', 'In Progress', 'Published'
+  author    String
+  date      DateTime @default(now())
+  reach     Int      @default(0)
+  engagement Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("content_posts")
+}
+
+model AdCampaign {
+  id          String   @id @default(cuid())
+  date        DateTime
+  spend       Decimal  @db.Decimal(14, 2)
+  conversions Int
+  createdAt   DateTime @default(now())
+
+  @@map("ad_campaigns")
+}
+
+model SocialMetric {
+  id          String   @id @default(cuid())
+  platform    String
+  followers   Int
+  engagement  String   // e.g., '4.2%'
+  impressions Int
+  growth      Decimal  @db.Decimal(5, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("social_metrics")
+}
+
+// ─── Support & HR Additions ───────────────────────────────────────────────────
+model SupportTicket {
+  id        String   @id @default(cuid())
+  customer  String
+  subject   String
+  status    String   // 'New', 'In Progress', 'Resolved', 'Escalated'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("support_tickets")
+}
+
+model LeaveRequest {
+  id        String   @id @default(cuid())
+  employee  String
+  type      String
+  duration  String   // e.g., '3 days'
+  status    String   // 'Pending', 'Approved', 'Rejected'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("leave_requests")
 }

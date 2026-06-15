@@ -1,29 +1,41 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
-import { PrismaService } from '../prisma/prisma.service';
+import { CreateAnnouncementDto, QueryDto, UpdateAnnouncementDto } from '../../common/dtos';
+import { AnnouncementsService } from './announcements.service';
 
 @Controller('announcements')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnnouncementsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly announcements: AnnouncementsService) {}
 
   @Get()
-  list() {
-    return this.prisma.announcement.findMany({
-      include: { author: { select: { fullName: true, role: { select: { name: true } } } } },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+  list(@Query() query: QueryDto) {
+    return this.announcements.list(query);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.announcements.findOne(id);
   }
 
   @Post()
   @Roles('CEO', 'MANAGER')
-  create(@Body() body: { title: string; content: string; tag?: string }, @CurrentUser() user: JwtUser) {
-    return this.prisma.announcement.create({
-      data: { title: body.title, content: body.content, tag: body.tag, authorId: user.sub },
-    });
+  create(@Body() dto: CreateAnnouncementDto, @CurrentUser() user: JwtUser) {
+    return this.announcements.create(dto, user);
+  }
+
+  @Patch(':id')
+  @Roles('CEO', 'MANAGER')
+  update(@Param('id') id: string, @Body() dto: UpdateAnnouncementDto, @CurrentUser() user: JwtUser) {
+    return this.announcements.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  @Roles('CEO', 'MANAGER')
+  delete(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.announcements.delete(id, user);
   }
 }

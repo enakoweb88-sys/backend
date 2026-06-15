@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { MoneyDto, QueryDto } from '../../common/dtos';
+import { CreateTransactionDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
@@ -18,7 +18,7 @@ export class TransactionsController {
 
   @Post()
   @Roles('CEO', 'MANAGER')
-  create(@Body() dto: MoneyDto & { entity?: string; type?: string }) {
+  create(@Body() dto: CreateTransactionDto) {
     return this.transactions.create(dto);
   }
 
