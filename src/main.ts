@@ -10,7 +10,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
-  const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? ['http://localhost:3000'];
+  const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? ['http://localhost:3000', 'http://localhost:5173', 'https://enako-os.vercel.app'];
 
   app.setGlobalPrefix('api/v1');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
