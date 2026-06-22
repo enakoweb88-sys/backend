@@ -10,13 +10,21 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
-  const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? ['http://localhost:3000', 'http://localhost:5173', 'https://enako-os.vercel.app'];
+  const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? [];
 
   app.setGlobalPrefix('api/v1');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cookieParser());
   app.enableCors({
-    origin: corsOrigins,
+    origin: (origin, callback) => {
+      if (!origin || origin.match(/localhost|127\.0\.0\.1|vercel\.app/)) {
+        callback(null, true);
+      } else if (corsOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
