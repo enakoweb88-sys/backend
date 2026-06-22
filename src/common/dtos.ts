@@ -72,6 +72,40 @@ export class CreateEmployeeDto {
   @IsString()
   @MinLength(8)
   password!: string;
+
+  @IsDateString()
+  @IsOptional()
+  dateOfBirth?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsEmail()
+  @IsOptional()
+  personalEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  employmentType?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  salary?: number;
+
+  @IsString()
+  @IsOptional()
+  emergencyContact?: string;
+
+  @IsDateString()
+  @IsOptional()
+  hireDate?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  ledDepartments?: string[];
 }
 
 export class UpdateEmployeeDto {
@@ -94,6 +128,40 @@ export class UpdateEmployeeDto {
   @IsString()
   @IsOptional()
   department?: string;
+
+  @IsDateString()
+  @IsOptional()
+  dateOfBirth?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsEmail()
+  @IsOptional()
+  personalEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  employmentType?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  salary?: number;
+
+  @IsString()
+  @IsOptional()
+  emergencyContact?: string;
+
+  @IsDateString()
+  @IsOptional()
+  hireDate?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  ledDepartments?: string[];
 }
 
 // ─── Users (Self) ─────────────────────────────────────────────────────────────

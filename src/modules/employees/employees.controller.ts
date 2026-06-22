@@ -45,4 +45,10 @@ export class EmployeesController {
   remove(@Param('id') id: string) {
     return this.employees.remove(id);
   }
+
+  @Patch(':id/reset-password')
+  @Roles('CEO', 'MANAGER')
+  resetPassword(@Param('id') id: string, @Body('password') password: string) {
+    return this.employees.resetPassword(id, password);
+  }
 }

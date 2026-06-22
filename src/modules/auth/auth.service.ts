@@ -17,7 +17,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
-      include: { role: true, department: true },
+      include: { role: true, department: true, ledDepartments: true },
     });
     if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException('Invalid credentials');
     if (user.role.name !== dto.role) throw new ForbiddenException('This account is not assigned to the selected role');
@@ -34,7 +34,7 @@ export class AuthService {
   async refresh(refreshToken: string) {
     const candidates = await this.prisma.refreshToken.findMany({
       where: { revokedAt: null, expiresAt: { gt: new Date() } },
-      include: { user: { include: { role: true, department: true } } },
+      include: { user: { include: { role: true, department: true, ledDepartments: true } } },
       take: 50,
       orderBy: { createdAt: 'desc' },
     });
@@ -87,6 +87,7 @@ export class AuthService {
     fullName: string;
     role: { name: string };
     department?: { name: string } | null;
+    ledDepartments?: { name: string }[];
   }) {
     return {
       id: user.id,
@@ -94,6 +95,7 @@ export class AuthService {
       fullName: user.fullName,
       role: user.role.name,
       department: user.department?.name ?? null,
+      ledDepartments: user.ledDepartments?.map(d => d.name) || [],
     };
   }
 }

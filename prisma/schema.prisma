@@ -105,6 +105,7 @@ model Department {
   name      String   @unique
   users     User[]
   goals     Goal[]
+  leaders   User[]   @relation("DepartmentLeaders")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -142,6 +143,18 @@ model User {
   documents          Document[]
   goals              Goal[]              @relation("PersonalGoals")
   commissions        Commission[]
+  channelMembers     ChannelMember[]
+  
+  // Additional HR Fields
+  dateOfBirth        DateTime?
+  address            String?
+  personalEmail      String?
+  employmentType     String?
+  salary             Decimal?            @db.Decimal(14, 2)
+  emergencyContact   String?
+  hireDate           DateTime?
+  ledDepartments     Department[]        @relation("DepartmentLeaders")
+
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -328,6 +341,32 @@ model Goal {
 }
 
 // ─── Communications ───────────────────────────────────────────────────────────
+
+model Channel {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isGeneral   Boolean  @default(false)
+  members     ChannelMember[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("channels")
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+  @@map("channel_members")
+}
 
 model Announcement {
   id        String   @id @default(cuid())
