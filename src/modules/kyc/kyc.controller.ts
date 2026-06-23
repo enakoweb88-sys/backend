@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -12,7 +14,15 @@ export class KycController {
   constructor(private readonly kyc: KycService) {}
 
   @Post('submissions')
-  @UseInterceptors(AnyFilesInterceptor())
+  @UseInterceptors(AnyFilesInterceptor({
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      },
+    }),
+  }))
   submit(@Body() body: any, @UploadedFiles() files?: Express.Multer.File[]) {
     let payload: Record<string, unknown> = {};
     try {
@@ -28,7 +38,7 @@ export class KycController {
         documents.push({
           documentType: file.fieldname,
           fileName: file.originalname,
-          fileUrl: `/uploads/${file.originalname}`,
+          fileUrl: `/uploads/${file.filename || file.originalname}`,
           mimeType: file.mimetype,
         });
       });
