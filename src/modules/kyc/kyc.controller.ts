@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import * as fs from 'fs';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -16,7 +17,11 @@ export class KycController {
   @Post('submissions')
   @UseInterceptors(AnyFilesInterceptor({
     storage: diskStorage({
-      destination: './uploads',
+      destination: (req, file, cb) => {
+        const uploadPath = join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+        cb(null, uploadPath);
+      },
       filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
