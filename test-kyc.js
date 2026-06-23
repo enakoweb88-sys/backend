@@ -4,7 +4,15 @@ const prisma = new PrismaClient();
 async function main() {
   const count = await prisma.kycSubmission.count();
   console.log('Total KYC submissions:', count);
-  const submissions = await prisma.kycSubmission.findMany({ take: 5, orderBy: { createdAt: 'desc' } });
+  const submissions = await prisma.kycSubmission.findMany({ 
+    take: 5, 
+    orderBy: { createdAt: 'desc' },
+    include: {
+      documents: true,
+      reviewedBy: { select: { fullName: true } },
+      approvedBy: { select: { fullName: true } },
+    }
+  });
   console.log(JSON.stringify(submissions, null, 2));
 }
 

@@ -59,7 +59,7 @@ export class KycController {
   @Get('submissions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('CEO', 'MANAGER')
-  list(@Query() query: QueryDto & any) {
+  list(@Query() query: QueryDto) {
     return this.kyc.list(query);
   }
 

@@ -48,7 +48,7 @@ export class KycService {
         approvedBy: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: query.limit ?? 50,
+      take: query.limit ? Number(query.limit) : 50,
     });
   }
 
