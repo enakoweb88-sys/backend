@@ -3,52 +3,50 @@ const prisma = new PrismaClient();
 
 async function run() {
   const statements = [
-    `CREATE TABLE IF NOT EXISTS "subscriptions" (
+    `CREATE TABLE IF NOT EXISTS "user_preferences" (
       "id" TEXT NOT NULL,
-      "name" TEXT NOT NULL,
-      "cost" DECIMAL(14,2) NOT NULL,
-      "cycle" TEXT NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'Active',
-      "nextBilling" TIMESTAMP(3) NOT NULL,
-      "receiptUrl" TEXT,
-      "addedById" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "analytics" BOOLEAN NOT NULL DEFAULT true,
+      "mfa" BOOLEAN NOT NULL DEFAULT false,
+      "aiWorkspace" BOOLEAN NOT NULL DEFAULT false,
+      "emailNotif" BOOLEAN NOT NULL DEFAULT true,
+      "pushNotif" BOOLEAN NOT NULL DEFAULT true,
+      "smsNotif" BOOLEAN NOT NULL DEFAULT false,
+      "slackConnected" BOOLEAN NOT NULL DEFAULT false,
+      "awsConnected" BOOLEAN NOT NULL DEFAULT false,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL,
-      CONSTRAINT "subscriptions_pkey" PRIMARY KEY ("id")
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "user_preferences_pkey" PRIMARY KEY ("id")
     );`,
     `DO $$ 
     BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'subscriptions_addedById_idx' AND n.nspname = 'public') THEN
-        CREATE INDEX "subscriptions_addedById_idx" ON "subscriptions"("addedById");
+      IF NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'user_preferences_userId_key' AND n.nspname = 'public') THEN
+        CREATE UNIQUE INDEX "user_preferences_userId_key" ON "user_preferences"("userId");
       END IF;
     END $$;`,
     `DO $$ 
     BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_addedById_fkey') THEN
-        ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_preferences_userId_fkey') THEN
+        ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END $$;`,
-    `CREATE TABLE IF NOT EXISTS "report_files" (
-      "id" TEXT NOT NULL,
-      "title" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
-      "size" TEXT NOT NULL,
-      "data" TEXT,
-      "generatedBy" TEXT NOT NULL,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "report_files_pkey" PRIMARY KEY ("id")
-    );`,
-    `DO $$ 
+    `DO $$
     BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'report_files_generatedBy_idx' AND n.nspname = 'public') THEN
-        CREATE INDEX "report_files_generatedBy_idx" ON "report_files"("generatedBy");
-      END IF;
+      ALTER TABLE "refresh_tokens" ADD COLUMN "device" TEXT;
+    EXCEPTION
+      WHEN duplicate_column THEN null;
     END $$;`,
-    `DO $$ 
+    `DO $$
     BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'report_files_generatedBy_fkey') THEN
-        ALTER TABLE "report_files" ADD CONSTRAINT "report_files_generatedBy_fkey" FOREIGN KEY ("generatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-      END IF;
+      ALTER TABLE "refresh_tokens" ADD COLUMN "ipAddress" TEXT;
+    EXCEPTION
+      WHEN duplicate_column THEN null;
+    END $$;`,
+    `DO $$
+    BEGIN
+      ALTER TABLE "refresh_tokens" ADD COLUMN "location" TEXT;
+    EXCEPTION
+      WHEN duplicate_column THEN null;
     END $$;`
   ];
 

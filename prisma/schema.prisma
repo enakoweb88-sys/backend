@@ -126,6 +126,7 @@ model User {
   lastLoginAt        DateTime?
   role               Role                @relation(fields: [roleId], references: [id])
   department         Department?         @relation(fields: [departmentId], references: [id])
+  preference         UserPreference?
   assignedTasks      Task[]              @relation("AssignedTasks")
   createdTasks       Task[]              @relation("CreatedTasks")
   taskComments       TaskComment[]
@@ -165,10 +166,31 @@ model User {
   @@map("users")
 }
 
+model UserPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  analytics       Boolean  @default(true)
+  mfa             Boolean  @default(false)
+  aiWorkspace     Boolean  @default(false)
+  emailNotif      Boolean  @default(true)
+  pushNotif       Boolean  @default(true)
+  smsNotif        Boolean  @default(false)
+  slackConnected  Boolean  @default(false)
+  awsConnected    Boolean  @default(false)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
 model RefreshToken {
   id        String    @id @default(cuid())
   tokenHash String
   userId    String
+  device    String?
+  ipAddress String?
+  location  String?
   expiresAt DateTime
   revokedAt DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

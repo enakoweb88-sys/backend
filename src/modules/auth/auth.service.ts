@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -14,7 +14,7 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string, device?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
       include: { role: true, department: true, ledDepartments: true },
@@ -26,12 +26,12 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    const tokens = await this.issueTokens(user.id, user.email, user.role.name);
+    const tokens = await this.issueTokens(user.id, user.email, user.role.name, ip, device);
 
     return { user: this.publicUser(user), ...tokens };
   }
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken: string, ip?: string, device?: string) {
     const candidates = await this.prisma.refreshToken.findMany({
       where: { revokedAt: null, expiresAt: { gt: new Date() } },
       include: { user: { include: { role: true, department: true, ledDepartments: true } } },
@@ -47,7 +47,7 @@ export class AuthService {
 
     return {
       user: this.publicUser(tokenRecord.user),
-      ...(await this.issueTokens(tokenRecord.user.id, tokenRecord.user.email, tokenRecord.user.role.name)),
+      ...(await this.issueTokens(tokenRecord.user.id, tokenRecord.user.email, tokenRecord.user.role.name, ip, device)),
     };
   }
 
@@ -59,7 +59,28 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async issueTokens(userId: string, email: string, role: string) {
+  async getSessions(userId: string) {
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, device: true, ipAddress: true, location: true, createdAt: true, expiresAt: true }
+    });
+    return sessions;
+  }
+
+  async revokeSession(sessionId: string, userId: string) {
+    const session = await this.prisma.refreshToken.findFirst({
+      where: { id: sessionId, userId }
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    await this.prisma.refreshToken.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date() }
+    });
+    return { ok: true };
+  }
+
+  private async issueTokens(userId: string, email: string, role: string, ipAddress?: string, device?: string) {
     const payload = { sub: userId, email, role };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
@@ -70,11 +91,21 @@ export class AuthService {
       expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
     });
 
+    // parse device string briefly to make it nice
+    let deviceName = device || 'Unknown Device';
+    if (deviceName.includes('Windows')) deviceName = 'Windows PC';
+    if (deviceName.includes('Macintosh') || deviceName.includes('Mac OS')) deviceName = 'MacBook';
+    if (deviceName.includes('iPhone')) deviceName = 'iPhone';
+    if (deviceName.includes('Android')) deviceName = 'Android Device';
+
     await this.prisma.refreshToken.create({
       data: {
         userId,
         tokenHash: await bcrypt.hash(refreshToken, 12),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        device: deviceName,
+        ipAddress: ipAddress || 'Unknown IP',
+        location: 'Yaounde, CM' // Mock location
       },
     });
 
