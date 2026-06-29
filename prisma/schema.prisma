@@ -144,6 +144,8 @@ model User {
   goals              Goal[]              @relation("PersonalGoals")
   commissions        Commission[]
   channelMembers     ChannelMember[]
+  addedSubscriptions Subscription[]      @relation("AddedSubscriptions")
+  generatedReports   ReportFile[]        @relation("GeneratedReports")
   
   // Additional HR Fields
   dateOfBirth        DateTime?
@@ -663,4 +665,36 @@ model LeaveRequest {
   updatedAt DateTime @updatedAt
 
   @@map("leave_requests")
+}
+
+// ─── Subscriptions & Reports ──────────────────────────────────────────────────
+model Subscription {
+  id          String   @id @default(cuid())
+  name        String
+  cost        Decimal  @db.Decimal(14, 2)
+  cycle       String   // 'Monthly' | 'Yearly'
+  status      String   @default("Active") // 'Active' | 'Cancelled'
+  nextBilling DateTime
+  receiptUrl  String?
+  addedById   String
+  addedBy     User     @relation("AddedSubscriptions", fields: [addedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([addedById])
+  @@map("subscriptions")
+}
+
+model ReportFile {
+  id          String   @id @default(cuid())
+  title       String
+  type        String   // 'PDF' | 'CSV' | 'XLSX'
+  size        String   
+  data        String?  // Base64 or string content
+  generatedBy String
+  generator   User     @relation("GeneratedReports", fields: [generatedBy], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([generatedBy])
+  @@map("report_files")
 }

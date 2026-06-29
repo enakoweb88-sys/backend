@@ -452,3 +452,51 @@ export class CreatePerformanceMetricDto {
   @IsOptional()
   notes?: string;
 }
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+export class CreateSubscriptionDto {
+  @IsString()
+  name!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  cost!: number;
+
+  @IsString()
+  cycle!: string;
+
+  @IsString()
+  nextBilling!: string;
+
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string;
+}
+
+export class UpdateSubscriptionDto {
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  cost?: number;
+
+  @IsString()
+  @IsOptional()
+  cycle?: string;
+
+  @IsString()
+  @IsOptional()
+  nextBilling?: string;
+
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string;
+}

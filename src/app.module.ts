@@ -25,6 +25,8 @@ import { BdModule } from './modules/bd/bd.module';
 import { DigitalModule } from './modules/digital/digital.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { SupportModule } from './modules/support/support.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -62,6 +64,8 @@ import { SupportModule } from './modules/support/support.module';
     DigitalModule,
     AdminModule,
     SupportModule,
+    SubscriptionsModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

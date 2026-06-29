@@ -50,13 +50,43 @@ export class AnalyticsService {
   }
 
   async healthScore() {
-    // Basic mock logic using real DB checks or hardcoded values if no history exists
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const [recentUsers, oldUsers, recentRevenueAggr, oldRevenueAggr, pendingTickets, resolvedTickets] = await Promise.all([
+      this.prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
+      this.prisma.transaction.aggregate({ where: { status: 'SETTLED', createdAt: { gte: thirtyDaysAgo } }, _sum: { amount: true } }),
+      this.prisma.transaction.aggregate({ where: { status: 'SETTLED', createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } }, _sum: { amount: true } }),
+      this.prisma.supportTicket.count({ where: { status: { not: 'Resolved' } } }),
+      this.prisma.supportTicket.count({ where: { status: 'Resolved' } })
+    ]);
+
+    const usersGrowth = oldUsers > 0 ? Math.round(((recentUsers - oldUsers) / oldUsers) * 100) : (recentUsers > 0 ? 100 : 0);
+    
+    const recentRev = Number(recentRevenueAggr._sum?.amount ?? 0);
+    const oldRev = Number(oldRevenueAggr._sum?.amount ?? 0);
+    const revenueGrowth = oldRev > 0 ? Math.round(((recentRev - oldRev) / oldRev) * 100) : (recentRev > 0 ? 100 : 0);
+
+    const totalTickets = pendingTickets + resolvedTickets;
+    const satisfaction = totalTickets > 0 ? Math.round((resolvedTickets / totalTickets) * 100) : 100;
+
+    let score = 80;
+    if (usersGrowth > 0) score += 5;
+    if (revenueGrowth > 0) score += 5;
+    if (satisfaction >= 90) score += 10;
+    if (pendingTickets > 5) score -= 5;
+    
+    score = Math.min(100, Math.max(0, score));
+
     return {
-      usersGrowth: 12,
-      revenueGrowth: 8,
-      uptime: 99.9,
-      satisfaction: 94,
-      score: 85
+      usersGrowth,
+      revenueGrowth,
+      uptime: 100,
+      satisfaction,
+      score
     };
   }
 

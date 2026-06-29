@@ -12,7 +12,7 @@ export class TransactionsController {
 
   @Get()
   @Roles('CEO', 'MANAGER')
-  list(@Query() query: QueryDto) {
+  list(@Query() query: any) {
     return this.transactions.list(query);
   }
 

@@ -44,7 +44,7 @@ async function bootstrap() {
   });
 
   const port = config.get<number>('PORT') ?? 5000;
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port);
   console.log(`🚀 ENAKO OS Backend running on port ${port}`);
 }
 

@@ -7,19 +7,30 @@ export class DigitalService {
 
   async getCalendar() {
     const posts = await this.prisma.contentPost.findMany();
-    const dailyCounts = [
-      { day: 'Mon', posts: 2, reels: 1 },
-      { day: 'Tue', posts: 1, reels: 2 },
-      { day: 'Wed', posts: 3, reels: 0 },
-      { day: 'Thu', posts: 0, reels: 3 },
-      { day: 'Fri', posts: 2, reels: 2 },
-      { day: 'Sat', posts: 1, reels: 1 },
-      { day: 'Sun', posts: 0, reels: 0 }
-    ];
+    
+    const startOfWeek = new Date();
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(startOfWeek.getDate() - (startOfWeek.getDay() === 0 ? 6 : startOfWeek.getDay() - 1));
+
+    const weeklyPosts = posts.filter(p => new Date(p.date) >= startOfWeek);
+
+    const dailyCounts = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
+      const dayPosts = weeklyPosts.filter(p => {
+        const postDay = new Date(p.date).getDay();
+        const adjustedPostDay = postDay === 0 ? 6 : postDay - 1;
+        return adjustedPostDay === index;
+      });
+      return {
+        day,
+        posts: dayPosts.filter(p => p.type === 'Posts' || p.type === 'Post').length,
+        reels: dayPosts.filter(p => p.type === 'Reels' || p.type === 'Reel').length,
+      };
+    });
+
     return {
       dailyCounts,
       summary: {
-        scheduled: posts.length,
+        scheduled: posts.filter(p => p.status === 'To Do' || p.status === 'In Progress').length,
         inProgress: posts.filter(p => p.status === 'In Progress').length,
         pending: posts.filter(p => p.status === 'Pending').length,
         overdue: 0
