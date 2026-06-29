@@ -9,6 +9,7 @@ import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
+import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { KycService } from './kyc.service';
 
 @Controller('kyc')
