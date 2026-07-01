@@ -97,6 +97,29 @@ async function main() {
     console.log(`ℹ️  Employee account already exists: ${employeeEmail}`);
   }
 
+  // ─── Demo Outreach Manager ─────────────────────────────────────────────────
+  const outreachRole = roles.find(r => r.name === RoleName.OUTREACH_MANAGER);
+  if (outreachRole) {
+    const outreachEmail = 'outreach@enako.com';
+    let outreachUser = await prisma.user.findUnique({ where: { email: outreachEmail } });
+    if (!outreachUser) {
+      outreachUser = await prisma.user.create({
+        data: {
+          email: outreachEmail,
+          fullName: 'Sarah Good',
+          title: 'Outreach Manager',
+          passwordHash: await bcrypt.hash('Outreach@2025!', 12),
+          roleId: outreachRole.id,
+          departmentId: opsDept.id,
+          status: 'ACTIVE',
+        },
+      });
+      console.log(`✅ Demo Outreach Manager created: ${outreachEmail} / Outreach@2025!`);
+    } else {
+      console.log(`ℹ️  Outreach Manager account already exists: ${outreachEmail}`);
+    }
+  }
+
   // ─── Seed Dashboard Additions ────────────────────────────────────────────────
   console.log('🌱 Seeding dashboard data...');
 
