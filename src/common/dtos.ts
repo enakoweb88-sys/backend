@@ -178,6 +178,10 @@ export class UpdateMeDto {
   @IsString()
   @IsOptional()
   title?: string;
+
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────

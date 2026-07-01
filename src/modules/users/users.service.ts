@@ -28,6 +28,7 @@ export class UsersService {
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
       },
       include: { role: true, department: true },
     });
