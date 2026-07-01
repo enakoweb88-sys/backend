@@ -94,7 +94,7 @@ export class UsersService {
         role: true,
         department: true,
         preference: true,
-        activityLogs: { take: 10, orderBy: { timestamp: 'desc' } }
+        activityLogs: { take: 10, orderBy: { createdAt: 'desc' } }
       },
     });
     if (!found) throw new NotFoundException('User not found');
