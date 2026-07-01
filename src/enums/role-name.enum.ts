@@ -2,4 +2,5 @@ export enum RoleName {
   CEO = 'CEO',
   MANAGER = 'MANAGER',
   EMPLOYEE = 'EMPLOYEE',
+  OUTREACH_MANAGER = 'OUTREACH_MANAGER',
 }
