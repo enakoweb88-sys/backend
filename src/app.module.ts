@@ -27,6 +27,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { SupportModule } from './modules/support/support.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PublicModule } from './modules/public/public.module';
+import { OutreachModule } from './modules/outreach/outreach.module';
 
 @Module({
   imports: [
@@ -66,6 +68,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     SupportModule,
     SubscriptionsModule,
     ReportsModule,
+    PublicModule,
+    OutreachModule,
   ],
 })
 export class AppModule {}

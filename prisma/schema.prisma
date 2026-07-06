@@ -88,6 +88,17 @@ enum GoalScope {
   PERSONAL
 }
 
+enum DonationFrequency {
+  ONE_TIME
+  MONTHLY
+}
+
+enum PaymentMethod {
+  MTN
+  ORANGE
+  BANK
+}
+
 // ─── Core Models ─────────────────────────────────────────────────────────────
 
 model Role {
@@ -799,8 +810,60 @@ model ScholarshipApplication {
 model NewsletterSubscriber {
   id           String   @id @default(cuid())
   email        String   @unique
-  isActive     Boolean  @default(true)
   subscribedAt DateTime @default(now())
 
   @@map("newsletter_subscribers")
+}
+
+// ─── Public Impact Data (Website) ──────────────────────────────────────────────
+
+model PublicImpactStat {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g., 'lives_targeted', 'partner_schools'
+  value       String   // e.g., '120+', '5'
+  label       String   // e.g., 'Lives Targeted', 'Partner Schools'
+  section     String   // e.g., 'hero', 'dashboard', 'kpi'
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("public_impact_stats")
+}
+
+model PublicMilestone {
+  id          String   @id @default(cuid())
+  year        String   // e.g., 'Phase 1'
+  title       String
+  description String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("public_milestones")
+}
+
+model PublicImpactChart {
+  id          String   @id @default(cuid())
+  label       String   // e.g., 'Scholarships'
+  percentage  Int      // e.g., 40
+  color       String   @default("bg-[#00BFA5]")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("public_impact_charts")
+}
+
+model Donation {
+  id        String            @id @default(cuid())
+  amount    Float
+  sector    String
+  frequency DonationFrequency
+  method    PaymentMethod
+  fullName  String
+  email     String
+  phone     String
+  status    TransactionStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 }
