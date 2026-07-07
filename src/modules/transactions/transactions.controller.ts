@@ -24,8 +24,8 @@ export class TransactionsController {
 
   @Patch(':id/status/:status')
   @Roles('CEO', 'MANAGER')
-  setStatus(@Param('id') id: string, @Param('status') status: string) {
-    return this.transactions.setStatus(id, status as any);
+  setStatus(@Param('id') id: string, @Param('status') status: string, @Body('charges') charges?: number) {
+    return this.transactions.setStatus(id, status as any, charges);
   }
 
   @Patch(':id/settle')
@@ -38,5 +38,11 @@ export class TransactionsController {
   @Roles('CEO', 'MANAGER')
   flag(@Param('id') id: string) {
     return this.transactions.setStatus(id, 'FLAGGED' as any);
+  }
+
+  @Post('float')
+  @Roles('CEO', 'MANAGER')
+  setFloatBalance(@Body('channel') channel: string, @Body('balance') balance: number) {
+    return this.transactions.setFloatBalance(channel, balance);
   }
 }

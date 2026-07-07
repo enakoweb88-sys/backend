@@ -8,9 +8,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class GoalsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(query: QueryDto & { scope?: string; status?: string }) {
+  list(query: QueryDto & { scope?: string; status?: string }, user: JwtUser) {
+    let accessFilter = {};
+    if (user.role === RoleName.EMPLOYEE) {
+      accessFilter = {
+        OR: [
+          { scope: 'COMPANY' },
+          { scope: 'DEPARTMENT', departmentId: user.departmentId || 'no-dept' },
+          { scope: 'PERSONAL', ownerId: user.sub },
+        ]
+      };
+    }
+
     return this.prisma.goal.findMany({
       where: {
+        ...accessFilter,
         ...(query.scope ? { scope: query.scope as any } : {}),
         ...(query.status ? { status: query.status as any } : {}),
         ...(query.search

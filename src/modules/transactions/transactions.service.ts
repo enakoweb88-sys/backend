@@ -81,11 +81,26 @@ export class TransactionsService {
       return { name: day, volume: vol };
     });
 
-    const channelData = [
-      { name: 'MTN MoMo', value: 55 }, { name: 'Orange Money', value: 35 }, { name: 'Bank Transfer', value: 10 }
-    ];
+    const floatAccounts = await this.prisma.floatAccount.findMany();
 
-    const revenueTypes = ['Operational', 'Income', 'Transfer', 'Expense'];
+    const floatData = { mtn: { balance: 0, in: 0, out: 0 }, orange: { balance: 0, in: 0, out: 0 }, bank: { balance: 0, in: 0, out: 0 }, cash: { balance: 0, in: 0, out: 0 } };
+    floatAccounts.forEach(f => {
+      const ch = f.channel.toLowerCase();
+      if (floatData[ch as keyof typeof floatData]) {
+        floatData[ch as keyof typeof floatData] = { balance: Number(f.balance), in: Number(f.totalIn), out: Number(f.totalOut) };
+      }
+    });
+
+    const channelData = Object.entries(
+      allTransactions.reduce((acc, tx) => {
+        if (tx.channel) {
+          acc[tx.channel] = (acc[tx.channel] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([name, value]) => ({ name, value }));
+
+    const revenueTypes = ['Operational', 'Income', 'Transfer', 'Expense', 'Receive', 'Send'];
     const totalRev = allTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
     const topRevenueSources = revenueTypes.map(rt => {
       const amount = allTransactions.filter(tx => tx.type === rt).reduce((sum, tx) => sum + Number(tx.amount), 0);
@@ -98,7 +113,7 @@ export class TransactionsService {
 
     const summary = {
       totalVolume: totalRev,
-      totalRevenue: allTransactions.filter(tx => tx.type === 'Income').reduce((sum, tx) => sum + Number(tx.amount), 0),
+      totalRevenue: allTransactions.filter(tx => tx.type === 'Income' || tx.type === 'Receive').reduce((sum, tx) => sum + Number(tx.amount), 0),
       successRate: allTransactions.length > 0 ? Math.round((allTransactions.filter(tx => tx.status === 'SETTLED').length / allTransactions.length) * 1000) / 10 : 0,
       avgValue: allTransactions.length > 0 ? Math.round(totalRev / allTransactions.length) : 0
     };
@@ -107,15 +122,12 @@ export class TransactionsService {
       items, 
       totals: totalsRaw, 
       volumeData, 
-      channelData, 
+      channelData: channelData.length > 0 ? channelData : [{ name: 'None', value: 1 }], 
       topRevenueSources, 
       failedTransactions, 
       recentActivity,
       summary,
-      floatManagement: {
-        mtn: { balance: 0, in: 0, out: 0 },
-        orange: { balance: 0, in: 0, out: 0 }
-      }
+      floatManagement: floatData
     };
   }
 
@@ -123,8 +135,9 @@ export class TransactionsService {
     return this.prisma.transaction.findUnique({ where: { id } });
   }
 
-  create(dto: CreateTransactionDto) {
-    return this.prisma.transaction.create({
+  async create(dto: CreateTransactionDto) {
+    const isReceiveFloat = dto.type === 'Receive' && dto.channel;
+    const tx = await this.prisma.transaction.create({
       data: {
         reference: `ENK-${Date.now()}`,
         entity: dto.entity,
@@ -132,17 +145,71 @@ export class TransactionsService {
         description: dto.description,
         amount: dto.amount,
         currency: dto.currency ?? 'XAF',
+        channel: dto.channel,
+        charges: dto.charges ?? 0,
+        status: isReceiveFloat ? TransactionStatus.SETTLED : TransactionStatus.PENDING,
+        settledAt: isReceiveFloat ? new Date() : null,
       },
     });
+
+    if (isReceiveFloat) {
+      await this.updateFloat(dto.channel!, Number(dto.amount), 0, 'in');
+    }
+
+    return tx;
   }
 
-  setStatus(id: string, status: TransactionStatus) {
-    return this.prisma.transaction.update({
+  async setStatus(id: string, status: TransactionStatus, charges: number = 0) {
+    const tx = await this.prisma.transaction.findUnique({ where: { id } });
+    if (!tx) throw new Error('Transaction not found');
+
+    const updated = await this.prisma.transaction.update({
       where: { id },
       data: {
         status,
+        charges: charges > 0 ? charges : tx.charges,
         settledAt: status === TransactionStatus.SETTLED ? new Date() : undefined,
       },
+    });
+
+    if (status === TransactionStatus.SETTLED && tx.type === 'Send' && tx.channel) {
+      await this.updateFloat(tx.channel, Number(tx.amount), charges, 'out');
+    }
+
+    return updated;
+  }
+
+  async updateFloat(channel: string, amount: number, charges: number, direction: 'in' | 'out') {
+    const float = await this.prisma.floatAccount.upsert({
+      where: { channel },
+      create: { channel, balance: 0, totalIn: 0, totalOut: 0 },
+      update: {}
+    });
+
+    if (direction === 'in') {
+      await this.prisma.floatAccount.update({
+        where: { id: float.id },
+        data: {
+          balance: { increment: amount },
+          totalIn: { increment: amount }
+        }
+      });
+    } else {
+      await this.prisma.floatAccount.update({
+        where: { id: float.id },
+        data: {
+          balance: { decrement: amount + charges },
+          totalOut: { increment: amount + charges }
+        }
+      });
+    }
+  }
+
+  async setFloatBalance(channel: string, balance: number) {
+    return this.prisma.floatAccount.upsert({
+      where: { channel },
+      create: { channel, balance, totalIn: 0, totalOut: 0 },
+      update: { balance }
     });
   }
 }

@@ -279,6 +279,8 @@ model Transaction {
   amount      Decimal           @db.Decimal(14, 2)
   currency    String            @default("XAF")
   type        String
+  channel     String?
+  charges     Decimal?          @default(0) @db.Decimal(14, 2)
   status      TransactionStatus @default(PENDING)
   description String?
   proofUrl    String?

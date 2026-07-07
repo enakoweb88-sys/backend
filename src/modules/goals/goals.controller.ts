@@ -12,8 +12,8 @@ export class GoalsController {
   constructor(private readonly goals: GoalsService) {}
 
   @Get()
-  list(@Query() query: QueryDto & { scope?: string; status?: string }) {
-    return this.goals.list(query);
+  list(@Query() query: QueryDto & { scope?: string; status?: string }, @CurrentUser() user: JwtUser) {
+    return this.goals.list(query, user);
   }
 
   @Get(':id')

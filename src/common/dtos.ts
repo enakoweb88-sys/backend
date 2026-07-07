@@ -204,6 +204,15 @@ export class CreateTransactionDto {
 
   @IsString()
   @IsOptional()
+  channel?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  charges?: number = 0;
+
+  @IsString()
+  @IsOptional()
   description?: string;
 }
 
