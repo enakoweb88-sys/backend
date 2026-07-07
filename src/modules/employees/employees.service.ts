@@ -158,6 +158,7 @@ export class EmployeesService {
       salary: user.salary ? Number(user.salary) : null,
       emergencyContact: user.emergencyContact,
       hireDate: user.hireDate,
+      avatarUrl: user.avatarUrl,
       ledDepartments: user.ledDepartments?.map((d: any) => d.name) || [],
       createdAt: user.createdAt,
     };

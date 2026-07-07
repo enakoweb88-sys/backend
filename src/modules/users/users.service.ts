@@ -4,6 +4,7 @@ import { JwtUser } from '../../common/current-user.decorator';
 import { UpdateMeDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class UsersService {
@@ -22,13 +23,46 @@ export class UsersService {
   }
 
   async updateMe(user: JwtUser, dto: UpdateMeDto) {
+    let finalAvatarUrl = dto.avatarUrl;
+
+    if (dto.avatarUrl && dto.avatarUrl.startsWith('data:image/')) {
+      try {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          await supabase.storage.createBucket('avatars', { public: true }).catch(() => {});
+          
+          const matches = dto.avatarUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            const buffer = Buffer.from(matches[2], 'base64');
+            const ext = matches[1].split('/')[1] || 'png';
+            const fileName = `${user.sub}-${Date.now()}.${ext}`;
+            
+            const { error } = await supabase.storage.from('avatars').upload(fileName, buffer, {
+              contentType: matches[1],
+              upsert: true
+            });
+            
+            if (!error) {
+              const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+              finalAvatarUrl = data.publicUrl;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to upload avatar to supabase', e);
+      }
+    }
+
     const updated = await this.prisma.user.update({
       where: { id: user.sub },
       data: {
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
+        ...(finalAvatarUrl !== undefined ? { avatarUrl: finalAvatarUrl } : {}),
       },
       include: { role: true, department: true },
     });
