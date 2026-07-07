@@ -33,12 +33,21 @@ export class CommunicationsService implements OnModuleInit {
   }
 
   async getAvailableChannels(userId: string) {
-    // A user can see general channels + channels they are a member of
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return [];
+
+    if (user.role === 'CEO' || user.role === 'MANAGER') {
+      return this.prisma.channel.findMany({ orderBy: { name: 'asc' } });
+    }
+
+    const deptName = user.department?.toLowerCase();
+
     return this.prisma.channel.findMany({
       where: {
         OR: [
           { isGeneral: true },
           { members: { some: { userId } } },
+          deptName ? { name: deptName } : { id: 'impossible-match' },
         ],
       },
       orderBy: { name: 'asc' },
