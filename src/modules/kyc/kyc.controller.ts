@@ -37,6 +37,12 @@ export class KycController {
       let supabase = null;
       if (supabaseUrl && supabaseKey) {
         supabase = createClient(supabaseUrl, supabaseKey);
+        // Ensure bucket exists (idempotent — ignores if already created)
+        try {
+          await supabase.storage.createBucket('kyc-documents', { public: true });
+        } catch {
+          // bucket likely already exists — safe to ignore
+        }
       }
 
       for (const file of files) {
