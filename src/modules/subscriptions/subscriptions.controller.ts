@@ -12,8 +12,8 @@ export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
   @Get()
-  list() {
-    return this.subscriptionsService.list();
+  list(@CurrentUser() user: JwtUser) {
+    return this.subscriptionsService.list(user);
   }
 
   @Post()

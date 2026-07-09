@@ -480,6 +480,9 @@ export class CreateSubscriptionDto {
   cycle!: string;
 
   @IsString()
+  startDate!: string;
+
+  @IsString()
   nextBilling!: string;
 
   @IsString()
@@ -504,6 +507,10 @@ export class UpdateSubscriptionDto {
   @IsString()
   @IsOptional()
   cycle?: string;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
 
   @IsString()
   @IsOptional()

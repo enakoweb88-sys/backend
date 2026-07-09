@@ -33,14 +33,17 @@ export class CommunicationsService implements OnModuleInit {
   }
 
   async getAvailableChannels(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ 
+      where: { id: userId },
+      include: { role: true, department: true }
+    });
     if (!user) return [];
 
-    if (user.role === 'CEO' || user.role === 'MANAGER') {
+    if (user.role?.name === 'CEO' || user.role?.name === 'MANAGER') {
       return this.prisma.channel.findMany({ orderBy: { name: 'asc' } });
     }
 
-    const deptName = user.department?.toLowerCase();
+    const deptName = user.department?.name?.toLowerCase();
 
     return this.prisma.channel.findMany({
       where: {

@@ -58,7 +58,7 @@ export class TransactionsService {
       }),
       this.prisma.transaction.findMany({
         where,
-        select: { createdAt: true, amount: true, status: true, type: true }
+        select: { createdAt: true, amount: true, status: true, type: true, channel: true }
       }),
       this.prisma.transaction.findMany({
         where: { status: 'FAILED' },
@@ -84,7 +84,7 @@ export class TransactionsService {
     const floatAccounts = await this.prisma.floatAccount.findMany();
 
     const floatData = { mtn: { balance: 0, in: 0, out: 0 }, orange: { balance: 0, in: 0, out: 0 }, bank: { balance: 0, in: 0, out: 0 }, cash: { balance: 0, in: 0, out: 0 } };
-    floatAccounts.forEach(f => {
+    floatAccounts.forEach((f: any) => {
       const ch = f.channel.toLowerCase();
       if (floatData[ch as keyof typeof floatData]) {
         floatData[ch as keyof typeof floatData] = { balance: Number(f.balance), in: Number(f.totalIn), out: Number(f.totalOut) };

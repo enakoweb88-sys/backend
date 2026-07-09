@@ -16,6 +16,11 @@ export class UsersController {
     return this.users.getMe(user);
   }
 
+  @Get('me/stats')
+  getProfileStats(@CurrentUser() user: JwtUser) {
+    return this.users.getProfileStats(user);
+  }
+
   @Patch('me')
   updateMe(@CurrentUser() user: JwtUser, @Body() dto: UpdateMeDto) {
     return this.users.updateMe(user, dto);

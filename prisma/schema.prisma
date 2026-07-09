@@ -725,6 +725,7 @@ model Subscription {
   cost        Decimal  @db.Decimal(14, 2)
   cycle       String   // 'Monthly' | 'Yearly'
   status      String   @default("Active") // 'Active' | 'Cancelled'
+  startDate   DateTime @default(now())
   nextBilling DateTime
   receiptUrl  String?
   addedById   String
@@ -767,6 +768,7 @@ enum ApplicationLevel {
   PRIMARY
   SECONDARY
   UNIVERSITY
+  NONE
 }
 
 enum ApplicationStatus {
@@ -774,6 +776,14 @@ enum ApplicationStatus {
   VERIFIED_BY_OUTREACH
   APPROVED_BY_CEO
   REJECTED
+}
+
+enum OutreachApplicationType {
+  SCHOLARSHIP
+  VOLUNTEER
+  FAMILY_IN_NEED
+  SCHOOL_REGISTRATION
+  GENERAL
 }
 
 model OutreachEvent {
@@ -786,7 +796,7 @@ model OutreachEvent {
   closeDate    DateTime?
   targetAmount Decimal?            @db.Decimal(14, 2)
   raisedAmount Decimal?            @db.Decimal(14, 2)
-  applications ScholarshipApplication[]
+  applications OutreachApplication[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -807,21 +817,23 @@ model BlogPost {
   @@map("blog_posts")
 }
 
-model ScholarshipApplication {
-  id             String            @id @default(cuid())
+model OutreachApplication {
+  id             String                  @id @default(cuid())
   applicantName  String
   email          String
   phone          String?
-  level          ApplicationLevel
-  status         ApplicationStatus @default(PENDING)
+  type           OutreachApplicationType @default(SCHOLARSHIP)
+  level          ApplicationLevel        @default(NONE)
+  status         ApplicationStatus       @default(PENDING)
   details        Json?             
-  eventId        String
-  event          OutreachEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  documents      String[]
+  eventId        String?
+  event          OutreachEvent?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   @@index([eventId])
-  @@map("scholarship_applications")
+  @@map("outreach_applications")
 }
 
 model NewsletterSubscriber {
@@ -881,6 +893,21 @@ model Donation {
   email     String
   phone     String
   status    TransactionStatus @default(PENDING)
+  documents String[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+}
+
+// ─── Float Accounts ───────────────────────────────────────────────────────────
+
+model FloatAccount {
+  id        String   @id @default(cuid())
+  channel   String   @unique
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  totalIn   Decimal  @default(0) @db.Decimal(14, 2)
+  totalOut  Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("float_accounts")
 }

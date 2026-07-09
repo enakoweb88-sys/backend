@@ -7,8 +7,10 @@ import { CreateSubscriptionDto, UpdateSubscriptionDto } from '../../common/dtos'
 export class SubscriptionsService {
   constructor(private prisma: PrismaService) {}
 
-  list() {
+  list(user: JwtUser) {
+    const isEmployee = user.role === 'EMPLOYEE';
     return this.prisma.subscription.findMany({
+      where: isEmployee ? { addedById: user.sub } : undefined,
       orderBy: { createdAt: 'desc' },
       include: { addedBy: { select: { fullName: true } } }
     });
@@ -21,6 +23,7 @@ export class SubscriptionsService {
         cost: dto.cost,
         cycle: dto.cycle,
         status: 'Active',
+        startDate: new Date(dto.startDate),
         nextBilling: new Date(dto.nextBilling),
         receiptUrl: dto.receiptUrl,
         addedById: user.sub
@@ -39,6 +42,7 @@ export class SubscriptionsService {
         ...(dto.name ? { name: dto.name } : {}),
         ...(dto.cost !== undefined ? { cost: dto.cost } : {}),
         ...(dto.cycle ? { cycle: dto.cycle } : {}),
+        ...(dto.startDate ? { startDate: new Date(dto.startDate) } : {}),
         ...(dto.nextBilling ? { nextBilling: new Date(dto.nextBilling) } : {}),
         ...(dto.receiptUrl !== undefined ? { receiptUrl: dto.receiptUrl } : {})
       }

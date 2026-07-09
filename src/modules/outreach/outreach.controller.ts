@@ -19,4 +19,19 @@ export class OutreachController {
   async getStats() {
     return this.outreachService.getOverviewStats();
   }
+
+  @Post('applications')
+  async createApplication(@Body() data: any) {
+    return this.outreachService.createApplication(data);
+  }
+
+  @Get('applications')
+  async getApplications() {
+    return this.outreachService.getApplications();
+  }
+
+  @Post('newsletters/send')
+  async sendNewsletter(@Body() data: { subject: string; body: string; audience: string }) {
+    return this.outreachService.sendNewsletter(data);
+  }
 }
