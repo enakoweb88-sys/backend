@@ -792,13 +792,21 @@ model OutreachEvent {
   titleFr      String?
   description  String?
   descriptionFr String?
-  type         OutreachEventType
+  type         String
   status       OutreachEventStatus @default(DRAFT)
   openDate     DateTime?
   closeDate    DateTime?
   targetAmount Decimal?            @db.Decimal(14, 2)
   raisedAmount Decimal?            @db.Decimal(14, 2)
   targetSchools String[]
+  videoUrl            String?
+  gallery             Json?      // [{ url: string, caption: string, captionFr: string }]
+  storyTitle          String?
+  storyTitleFr        String?
+  storyDescription    String?
+  storyDescriptionFr  String?
+  storyMediaUrl       String?
+  storyMediaType      String?    // 'IMAGE' or 'VIDEO'
 
   applications OutreachApplication[]
   createdAt    DateTime            @default(now())

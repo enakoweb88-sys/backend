@@ -169,6 +169,30 @@ export class OutreachService {
   }
 
   async createEvent(data: any) {
+    let storyMediaUrl = data.storyMediaUrl || null;
+    if (data.storyMediaBase64) {
+      const url = await this.uploadToSupabase(data.storyMediaBase64, 'outreach-story');
+      if (url) storyMediaUrl = url;
+    }
+
+    const processedGallery: any[] = [];
+    if (data.gallery && Array.isArray(data.gallery)) {
+      for (const item of data.gallery) {
+        let itemUrl = item.url || null;
+        if (item.fileBase64) {
+          const url = await this.uploadToSupabase(item.fileBase64, 'outreach-gallery');
+          if (url) itemUrl = url;
+        }
+        if (itemUrl) {
+          processedGallery.push({
+            url: itemUrl,
+            caption: item.caption || '',
+            captionFr: item.captionFr || ''
+          });
+        }
+      }
+    }
+
     return this.prisma.outreachEvent.create({
       data: {
         title: data.title,
@@ -179,7 +203,15 @@ export class OutreachService {
         status: data.status || 'DRAFT',
         openDate: data.openDate ? new Date(data.openDate) : null,
         closeDate: data.closeDate ? new Date(data.closeDate) : null,
-        targetSchools: data.targetSchools || []
+        targetSchools: data.targetSchools || [],
+        videoUrl: data.videoUrl || null,
+        gallery: processedGallery.length > 0 ? processedGallery : undefined,
+        storyTitle: data.storyTitle || null,
+        storyTitleFr: data.storyTitleFr || null,
+        storyDescription: data.storyDescription || null,
+        storyDescriptionFr: data.storyDescriptionFr || null,
+        storyMediaUrl,
+        storyMediaType: data.storyMediaType || null
       }
     });
   }

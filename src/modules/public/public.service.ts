@@ -48,4 +48,23 @@ export class PublicService {
     
     return scholarship;
   }
+
+  async getEvents(type?: string) {
+    return this.prisma.outreachEvent.findMany({
+      where: {
+        status: 'OPEN',
+        type: type ? type : undefined
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
+  async getEventById(id: string) {
+    return this.prisma.outreachEvent.findUnique({
+      where: { id }
+    });
+  }
 }
+
