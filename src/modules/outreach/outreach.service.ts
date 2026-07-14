@@ -154,4 +154,40 @@ export class OutreachService {
       message: `Successfully dispatched to ${emails.size} recipients.`
     };
   }
+
+  // --- Outreach Events (Scholarships, etc) ---
+  
+  async getEvents() {
+    return this.prisma.outreachEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { applications: true }
+        }
+      }
+    });
+  }
+
+  async createEvent(data: any) {
+    return this.prisma.outreachEvent.create({
+      data: {
+        title: data.title,
+        titleFr: data.titleFr,
+        description: data.description,
+        descriptionFr: data.descriptionFr,
+        type: data.type || 'SCHOLARSHIP',
+        status: data.status || 'DRAFT',
+        openDate: data.openDate ? new Date(data.openDate) : null,
+        closeDate: data.closeDate ? new Date(data.closeDate) : null,
+        targetSchools: data.targetSchools || []
+      }
+    });
+  }
+
+  async updateEventStatus(id: string, status: any) {
+    return this.prisma.outreachEvent.update({
+      where: { id },
+      data: { status }
+    });
+  }
 }

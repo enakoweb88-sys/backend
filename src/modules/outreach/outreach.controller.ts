@@ -34,4 +34,20 @@ export class OutreachController {
   async sendNewsletter(@Body() data: { subject: string; body: string; audience: string }) {
     return this.outreachService.sendNewsletter(data);
   }
+
+  // --- Outreach Events (Scholarships, etc) ---
+  @Get('events')
+  async getEvents() {
+    return this.outreachService.getEvents();
+  }
+
+  @Post('events')
+  async createEvent(@Body() data: any) {
+    return this.outreachService.createEvent(data);
+  }
+
+  @Post('events/:id/status')
+  async updateEventStatus(@Body() data: { id: string; status: any }) {
+    return this.outreachService.updateEventStatus(data.id, data.status);
+  }
 }

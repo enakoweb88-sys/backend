@@ -789,13 +789,17 @@ enum OutreachApplicationType {
 model OutreachEvent {
   id           String              @id @default(cuid())
   title        String
+  titleFr      String?
   description  String?
+  descriptionFr String?
   type         OutreachEventType
   status       OutreachEventStatus @default(DRAFT)
   openDate     DateTime?
   closeDate    DateTime?
   targetAmount Decimal?            @db.Decimal(14, 2)
   raisedAmount Decimal?            @db.Decimal(14, 2)
+  targetSchools String[]
+
   applications OutreachApplication[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt

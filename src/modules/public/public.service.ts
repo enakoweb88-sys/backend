@@ -24,4 +24,28 @@ export class PublicService {
       reports
     };
   }
+
+  async getScholarships() {
+    return this.prisma.outreachEvent.findMany({
+      where: {
+        type: 'SCHOLARSHIP',
+        status: 'OPEN'
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
+  async getScholarshipById(id: string) {
+    const scholarship = await this.prisma.outreachEvent.findUnique({
+      where: { id }
+    });
+    
+    if (!scholarship || scholarship.type !== 'SCHOLARSHIP') {
+      return null;
+    }
+    
+    return scholarship;
+  }
 }
