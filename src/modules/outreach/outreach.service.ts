@@ -82,9 +82,17 @@ export class OutreachService {
 
     const donationCount = await this.prisma.donation.count();
 
+    const activeEvents = await this.prisma.outreachEvent.count({
+      where: { status: 'OPEN' }
+    });
+
+    const pendingApplications = await this.prisma.outreachApplication.count({
+      where: { status: 'PENDING' }
+    });
+
     return {
-      activeEvents: 3,
-      pendingApplications: 12,
+      activeEvents,
+      pendingApplications,
       totalDonations,
       donationCount,
     };

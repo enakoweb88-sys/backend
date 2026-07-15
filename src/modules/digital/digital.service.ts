@@ -78,14 +78,23 @@ export class DigitalService {
   }
 
   async getContentTypes() {
+    const posts = await this.prisma.contentPost.findMany();
     return [
-      { name: 'Images', value: 45, color: '#3b82f6' },
-      { name: 'Videos', value: 35, color: '#8b5cf6' },
-      { name: 'Articles', value: 20, color: '#10b981' }
+      { name: 'Images', value: posts.filter(p => p.type === 'Posts').length, color: '#3b82f6' },
+      { name: 'Videos', value: posts.filter(p => p.type === 'Videos' || p.type === 'Reels').length, color: '#8b5cf6' },
+      { name: 'Articles', value: 0, color: '#10b981' }
     ];
   }
 
   async getWebsite() {
-    return { sessions: 45200, users: 32100, pageViews: 125000, bounceRate: 42.5 };
+    const act = await this.prisma.appActivity.aggregate({
+      _sum: { downloads: true, active: true }
+    });
+    return { 
+      sessions: act._sum.active || 0, 
+      users: act._sum.active || 0, 
+      pageViews: act._sum.downloads || 0, 
+      bounceRate: 0 
+    };
   }
 }

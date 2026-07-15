@@ -13,7 +13,7 @@ export class BdService {
       { name: 'KYC Sent', value: leads.filter(l => l.status === 'KYC Sent').length, color: '#8b5cf6' },
       { name: 'Active', value: leads.filter(l => l.status === 'Active Client').length, color: '#10b981' }
     ];
-    return { stages, totalValue: leads.length * 150000 };
+    return { stages, totalValue: 0 };
   }
 
   async getLeads() {
@@ -25,22 +25,20 @@ export class BdService {
   }
 
   async getPerformance() {
+    const tx = await this.prisma.transaction.aggregate({
+      where: { status: 'SETTLED' },
+      _sum: { amount: true }
+    });
+    const achieved = Number(tx._sum.amount || 0);
+    const target = 50000000;
+    
     return {
-      target: 50000000,
-      achieved: 32500000,
-      remaining: 17500000,
+      target,
+      achieved,
+      remaining: Math.max(0, target - achieved),
       daysLeft: 14,
-      sources: [
-        { name: 'Facebook Ads', value: 45 },
-        { name: 'Referral', value: 30 },
-        { name: 'Walk-in', value: 15 },
-        { name: 'Direct Sales', value: 10 }
-      ],
-      topServices: [
-        { name: 'API Integrations', value: 12000000 },
-        { name: 'Payment Gateways', value: 8500000 },
-        { name: 'Njangi Management', value: 12000000 }
-      ]
+      sources: [],
+      topServices: []
     };
   }
 
