@@ -821,6 +821,8 @@ model BlogPost {
   slug        String   @unique
   content     String   @db.Text
   coverImage  String?
+  images      String[] @default([])
+  video       String?
   category    String   @default("Blog")
   author      String
   status      String   @default("DRAFT") // 'DRAFT', 'PUBLISHED'

@@ -256,8 +256,32 @@ export class OutreachService {
         content: data.content,
         category: data.category || 'Blog',
         coverImage,
+        images: data.images || [],
+        video: data.video || null,
         author: data.author || 'ENAKO OS',
         status: data.status || 'DRAFT',
+        publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
+      }
+    });
+  }
+
+  async updatePost(id: string, data: any) {
+    let coverImage = data.coverImage;
+    if (data.coverImageBase64) {
+      const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
+      if (url) coverImage = url;
+    }
+
+    return this.prisma.blogPost.update({
+      where: { id },
+      data: {
+        title: data.title,
+        content: data.content,
+        category: data.category,
+        ...(coverImage && { coverImage }),
+        images: data.images,
+        video: data.video,
+        status: data.status,
         publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
       }
     });
