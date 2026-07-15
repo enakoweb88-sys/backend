@@ -230,4 +230,44 @@ export class OutreachService {
       data: { status }
     });
   }
+
+  // --- Blog Posts ---
+
+  async getPosts() {
+    return this.prisma.blogPost.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createPost(data: any) {
+    let coverImage = data.coverImage || null;
+    if (data.coverImageBase64) {
+      const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
+      if (url) coverImage = url;
+    }
+
+    const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
+
+    return this.prisma.blogPost.create({
+      data: {
+        title: data.title,
+        slug,
+        content: data.content,
+        coverImage,
+        author: data.author || 'ENAKO OS',
+        status: data.status || 'DRAFT',
+        publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
+      }
+    });
+  }
+
+  async updatePostStatus(id: string, status: string) {
+    return this.prisma.blogPost.update({
+      where: { id },
+      data: { 
+        status,
+        publishedAt: status === 'PUBLISHED' ? new Date() : null,
+      }
+    });
+  }
 }

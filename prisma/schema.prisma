@@ -818,10 +818,11 @@ model OutreachEvent {
 model BlogPost {
   id          String   @id @default(cuid())
   title       String
-  content     String
-  authorId    String
-  images      String[] // Array of image URLs
-  published   Boolean  @default(false)
+  slug        String   @unique
+  content     String   @db.Text
+  coverImage  String?
+  author      String
+  status      String   @default("DRAFT") // 'DRAFT', 'PUBLISHED'
   publishedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

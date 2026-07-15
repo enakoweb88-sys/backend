@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { OutreachService } from './outreach.service';
 
 @Controller('outreach')
@@ -49,5 +49,21 @@ export class OutreachController {
   @Post('events/:id/status')
   async updateEventStatus(@Body() data: { id: string; status: any }) {
     return this.outreachService.updateEventStatus(data.id, data.status);
+  }
+
+  // --- Blog Posts ---
+  @Get('posts')
+  async getPosts() {
+    return this.outreachService.getPosts();
+  }
+
+  @Post('posts')
+  async createPost(@Body() data: any) {
+    return this.outreachService.createPost(data);
+  }
+
+  @Post('posts/:id/status')
+  async updatePostStatus(@Param('id') id: string, @Body() data: { status: string }) {
+    return this.outreachService.updatePostStatus(id, data.status);
   }
 }
