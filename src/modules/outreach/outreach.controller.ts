@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { OutreachService } from './outreach.service';
 
 @Controller('outreach')
@@ -53,8 +53,8 @@ export class OutreachController {
 
   // --- Blog Posts ---
   @Get('posts')
-  async getPosts() {
-    return this.outreachService.getPosts();
+  async getPosts(@Query('status') status?: string) {
+    return this.outreachService.getPosts(status);
   }
 
   @Post('posts')

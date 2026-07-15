@@ -233,8 +233,9 @@ export class OutreachService {
 
   // --- Blog Posts ---
 
-  async getPosts() {
+  async getPosts(status?: string) {
     return this.prisma.blogPost.findMany({
+      where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -253,6 +254,7 @@ export class OutreachService {
         title: data.title,
         slug,
         content: data.content,
+        category: data.category || 'Blog',
         coverImage,
         author: data.author || 'ENAKO OS',
         status: data.status || 'DRAFT',
