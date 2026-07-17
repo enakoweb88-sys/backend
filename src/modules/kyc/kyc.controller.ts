@@ -21,85 +21,90 @@ export class KycController {
     storage: memoryStorage(),
   }))
   async submit(@Body() body: any, @UploadedFiles() files?: Express.Multer.File[]) {
-    let payload: Record<string, unknown> = {};
     try {
-      payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : (body.payload ?? {});
-    } catch {
-      payload = body;
-    }
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : (body.payload ?? {});
+      } catch {
+        payload = body;
+      }
 
-    const documents: Array<{ documentType: string; fileName: string; fileUrl: string; mimeType?: string }> = [];
+      const documents: Array<{ documentType: string; fileName: string; fileUrl: string; mimeType?: string }> = [];
 
-    if (files?.length) {
-      const supabaseUrl = this.config.get<string>('SUPABASE_URL');
-      const supabaseKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY') || this.config.get<string>('SUPABASE_ANON_KEY');
-      
-      let supabase = null;
-      if (supabaseUrl && supabaseKey) {
-        supabase = createClient(supabaseUrl, supabaseKey);
-        // Ensure bucket exists (idempotent — ignores if already created)
-        try {
-          await supabase.storage.createBucket('kyc-documents', { public: true });
-        } catch {
-          // bucket likely already exists — safe to ignore
+      if (files?.length) {
+        const supabaseUrl = this.config.get<string>('SUPABASE_URL');
+        const supabaseKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY') || this.config.get<string>('SUPABASE_ANON_KEY');
+        
+        let supabase = null;
+        if (supabaseUrl && supabaseKey) {
+          try {
+            supabase = createClient(supabaseUrl, supabaseKey);
+          } catch (err: any) {
+            console.error('Supabase Client Error:', err);
+            throw new Error(`Supabase Configuration Error: ${err.message}`);
+          }
+          // Ensure bucket exists (idempotent — ignores if already created)
+          try {
+            await supabase.storage.createBucket('kyc-documents', { public: true });
+          } catch {
+            // bucket likely already exists — safe to ignore
+          }
+        }
+
+        for (const file of files) {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const fileName = `${uniqueSuffix}${extname(file.originalname)}`;
+          let fileUrl = '';
+
+          if (supabase) {
+            const { data, error } = await supabase.storage
+              .from('kyc-documents')
+              .upload(fileName, file.buffer, {
+                contentType: file.mimetype,
+              });
+              
+            if (!error && data) {
+               const { data: publicData } = supabase.storage.from('kyc-documents').getPublicUrl(fileName);
+               fileUrl = publicData.publicUrl;
+            } else {
+               console.error('Supabase upload error:', error);
+            }
+          }
+
+          if (!fileUrl) {
+            const uploadPath = join(process.cwd(), 'uploads');
+            try {
+              if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+              fs.writeFileSync(join(uploadPath, fileName), file.buffer);
+              fileUrl = `/uploads/${fileName}`;
+            } catch (err) {
+              console.error('Failed to write file locally:', err);
+              // Fallback to avoid crashing the submission
+              fileUrl = '';
+            }
+          }
+
+          documents.push({
+            documentType: file.fieldname,
+            fileName: file.originalname,
+            fileUrl,
+            mimeType: file.mimetype,
+          });
         }
       }
 
-      for (const file of files) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const fileName = `${uniqueSuffix}${extname(file.originalname)}`;
-        let fileUrl = '';
-
-        if (supabase) {
-          const { data, error } = await supabase.storage
-            .from('kyc-documents')
-            .upload(fileName, file.buffer, {
-              contentType: file.mimetype,
-            });
-            
-          if (!error && data) {
-             const { data: publicData } = supabase.storage.from('kyc-documents').getPublicUrl(fileName);
-             fileUrl = publicData.publicUrl;
-          } else {
-             console.error('Supabase upload error:', error);
-          }
-        }
-
-        if (!fileUrl) {
-          const uploadPath = join(process.cwd(), 'uploads');
+      if (body.documentMeta) {
+        const metas = Array.isArray(body.documentMeta) ? body.documentMeta : [body.documentMeta];
+        metas.forEach((meta: string) => {
           try {
-            if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-            fs.writeFileSync(join(uploadPath, fileName), file.buffer);
-            fileUrl = `/uploads/${fileName}`;
-          } catch (err) {
-            console.error('Failed to write file locally:', err);
-            // Fallback to avoid crashing the submission
-            fileUrl = '';
-          }
-        }
-
-        documents.push({
-          documentType: file.fieldname,
-          fileName: file.originalname,
-          fileUrl,
-          mimeType: file.mimetype,
+            const parsed = JSON.parse(meta);
+            if (!documents.find(d => d.documentType === parsed.documentType)) {
+              documents.push({ documentType: parsed.documentType, fileName: parsed.fileName, fileUrl: '' });
+            }
+          } catch {}
         });
       }
-    }
 
-    if (body.documentMeta) {
-      const metas = Array.isArray(body.documentMeta) ? body.documentMeta : [body.documentMeta];
-      metas.forEach((meta: string) => {
-        try {
-          const parsed = JSON.parse(meta);
-          if (!documents.find(d => d.documentType === parsed.documentType)) {
-            documents.push({ documentType: parsed.documentType, fileName: parsed.fileName, fileUrl: '' });
-          }
-        } catch {}
-      });
-    }
-
-    try {
       return await this.kyc.submit({
         applicantType: body.applicantType ?? 'individual',
         applicantName: body.applicantName ?? 'Unknown',
@@ -108,10 +113,11 @@ export class KycController {
         payload,
         documents: documents.length ? documents : undefined,
       });
+
     } catch (error: any) {
-      console.error('Database Error in KYC Submit:', error);
+      console.error('KYC Submit Error:', error);
       throw new HttpException(
-        `Database Error: ${error?.message || 'Failed to submit KYC to database. Check database connection and schema.'}`,
+        `Database or Configuration Error: ${error?.message || 'Failed to submit KYC.'}`,
         500
       );
     }
