@@ -3,6 +3,7 @@ import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import * as fs from 'fs';
+import * as WebSocket from 'ws';
 import { createClient } from '@supabase/supabase-js';
 import { ConfigService } from '@nestjs/config';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
@@ -38,7 +39,12 @@ export class KycController {
         let supabase = null;
         if (supabaseUrl && supabaseKey) {
           try {
-            supabase = createClient(supabaseUrl, supabaseKey);
+            if (!globalThis.WebSocket) {
+              (globalThis as any).WebSocket = WebSocket;
+            }
+            supabase = createClient(supabaseUrl, supabaseKey, {
+              auth: { persistSession: false }
+            });
           } catch (err: any) {
             console.error('Supabase Client Error:', err);
             throw new Error(`Supabase Configuration Error: ${err.message}`);
