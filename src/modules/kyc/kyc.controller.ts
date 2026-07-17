@@ -67,9 +67,15 @@ export class KycController {
 
         if (!fileUrl) {
           const uploadPath = join(process.cwd(), 'uploads');
-          if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-          fs.writeFileSync(join(uploadPath, fileName), file.buffer);
-          fileUrl = `/uploads/${fileName}`;
+          try {
+            if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+            fs.writeFileSync(join(uploadPath, fileName), file.buffer);
+            fileUrl = `/uploads/${fileName}`;
+          } catch (err) {
+            console.error('Failed to write file locally:', err);
+            // Fallback to avoid crashing the submission
+            fileUrl = '';
+          }
         }
 
         documents.push({
