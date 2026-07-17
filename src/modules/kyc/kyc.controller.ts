@@ -99,14 +99,22 @@ export class KycController {
       });
     }
 
-    return this.kyc.submit({
-      applicantType: body.applicantType ?? 'individual',
-      applicantName: body.applicantName ?? 'Unknown',
-      email: body.email || undefined,
-      phone: body.phone || undefined,
-      payload,
-      documents: documents.length ? documents : undefined,
-    });
+    try {
+      return await this.kyc.submit({
+        applicantType: body.applicantType ?? 'individual',
+        applicantName: body.applicantName ?? 'Unknown',
+        email: body.email || undefined,
+        phone: body.phone || undefined,
+        payload,
+        documents: documents.length ? documents : undefined,
+      });
+    } catch (error: any) {
+      console.error('Database Error in KYC Submit:', error);
+      throw new HttpException(
+        `Database Error: ${error?.message || 'Failed to submit KYC to database. Check database connection and schema.'}`,
+        500
+      );
+    }
   }
 
   @Get('submissions')
