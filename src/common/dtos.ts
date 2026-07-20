@@ -182,6 +182,22 @@ export class UpdateMeDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsEmail()
+  @IsOptional()
+  personalEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  emergencyContact?: string;
+
+  @IsDateString()
+  @IsOptional()
+  dateOfBirth?: string;
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
