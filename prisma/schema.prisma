@@ -176,6 +176,7 @@ model User {
 
   @@index([departmentId])
   @@index([roleId])
+  @@index([status])
   @@map("users")
 }
 
@@ -303,6 +304,7 @@ model Transaction {
   updatedAt   DateTime          @updatedAt
 
   @@index([status])
+  @@index([createdAt])
   @@map("transactions")
 }
 
@@ -323,6 +325,7 @@ model MealRecord {
 
   @@unique([employeeId, date])
   @@index([employeeId])
+  @@index([status])
   @@map("meal_records")
 }
 
@@ -432,6 +435,7 @@ model Announcement {
   updatedAt DateTime @updatedAt
 
   @@index([authorId])
+  @@index([pinned, createdAt])
   @@map("announcements")
 }
 

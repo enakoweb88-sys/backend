@@ -1,10 +1,12 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(CacheInterceptor)
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
 

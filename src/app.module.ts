@@ -31,11 +31,14 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { PublicModule } from './modules/public/public.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
 
+import { CacheModule } from '@nestjs/cache-manager';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    CacheModule.register({ isGlobal: true, ttl: 60000 }),
     // Core
     PrismaModule,
     AuthModule,
