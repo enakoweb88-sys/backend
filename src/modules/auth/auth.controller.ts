@@ -29,6 +29,12 @@ export class AuthController {
     return this.auth.logout(user.sub);
   }
 
+  @Post('end-session')
+  endSession(@Body('sessionId') sessionId: string) {
+    if (!sessionId) return { ok: false };
+    return this.auth.endSession(sessionId);
+  }
+
   @Get('sessions')
   @UseGuards(JwtAuthGuard)
   getSessions(@CurrentUser() user: JwtUser) {

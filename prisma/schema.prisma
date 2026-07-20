@@ -159,6 +159,7 @@ model User {
   channelMembers     ChannelMember[]
   addedSubscriptions Subscription[]      @relation("AddedSubscriptions")
   generatedReports   ReportFile[]        @relation("GeneratedReports")
+  userSessions       UserSession[]
   
   // Additional HR Fields
   dateOfBirth        DateTime?
@@ -194,6 +195,19 @@ model UserPreference {
   updatedAt       DateTime @updatedAt
 
   @@map("user_preferences")
+}
+
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String
+  loginAt   DateTime  @default(now())
+  logoutAt  DateTime?
+  duration  Int?      // duration in seconds
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("user_sessions")
 }
 
 model RefreshToken {

@@ -26,9 +26,12 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    const userSession = await this.prisma.userSession.create({
+      data: { userId: user.id, loginAt: new Date() }
+    });
     const tokens = await this.issueTokens(user.id, user.email, user.role.name, ip, device);
 
-    return { user: this.publicUser(user), ...tokens };
+    return { user: this.publicUser(user), sessionId: userSession.id, ...tokens };
   }
 
   async refresh(refreshToken: string, ip?: string, device?: string) {
@@ -55,6 +58,18 @@ export class AuthService {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async endSession(sessionId: string) {
+    const session = await this.prisma.userSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.logoutAt) return { ok: false };
+    const logoutAt = new Date();
+    const duration = Math.floor((logoutAt.getTime() - session.loginAt.getTime()) / 1000);
+    await this.prisma.userSession.update({
+      where: { id: sessionId },
+      data: { logoutAt, duration }
     });
     return { ok: true };
   }

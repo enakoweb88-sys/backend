@@ -217,10 +217,23 @@ export class UsersService {
   async getById(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { role: true, department: true },
+      include: { role: true, department: true, userSessions: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    return this.toPublic(user);
+    
+    let totalLoginTime = 0;
+    let sessionCount = 0;
+    if (user.userSessions) {
+      user.userSessions.forEach(session => {
+        if (session.duration) {
+          totalLoginTime += session.duration;
+          sessionCount++;
+        }
+      });
+    }
+    const averageLoginTime = sessionCount > 0 ? Math.round(totalLoginTime / sessionCount) : 0;
+
+    return { ...this.toPublic(user), performanceStats: { totalLoginTime, averageLoginTime } };
   }
 
   private toPublic(user: any) {
