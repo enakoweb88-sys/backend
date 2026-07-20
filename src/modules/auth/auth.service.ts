@@ -48,6 +48,14 @@ export class AuthService {
 
     if (!tokenRecord) throw new UnauthorizedException('Invalid refresh token');
 
+    if (tokenRecord.ipAddress && tokenRecord.ipAddress !== 'Unknown IP' && ip && tokenRecord.ipAddress !== ip) {
+      await this.prisma.refreshToken.update({
+        where: { id: tokenRecord.id },
+        data: { revokedAt: new Date() }
+      });
+      throw new UnauthorizedException('Session terminated due to IP address change. Please log in again.');
+    }
+
     return {
       user: this.publicUser(tokenRecord.user),
       ...(await this.issueTokens(tokenRecord.user.id, tokenRecord.user.email, tokenRecord.user.role.name, ip, device)),
@@ -99,11 +107,11 @@ export class AuthService {
     const payload = { sub: userId, email, role };
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET') ?? 'dev-access-secret',
-      expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '15m',
+      expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '5m',
     });
     const refreshToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET') ?? 'dev-refresh-secret',
-      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
+      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '2h',
     });
 
     // parse device string briefly to make it nice
@@ -117,7 +125,7 @@ export class AuthService {
       data: {
         userId,
         tokenHash: await bcrypt.hash(refreshToken, 12),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours
         device: deviceName,
         ipAddress: ipAddress || 'Unknown IP',
         location: 'Yaounde, CM' // Mock location
