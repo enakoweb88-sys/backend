@@ -11,7 +11,6 @@ export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
 
   @Get()
-  @Roles('CEO', 'MANAGER')
   list(@Query() query: QueryDto) {
     return this.employees.list(query);
   }
