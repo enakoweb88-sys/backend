@@ -30,6 +30,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { ReportsModule } from './modules/reports/reports.module';
 import { PublicModule } from './modules/public/public.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
+import { InvestmentsModule } from './modules/investments/investments.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 
@@ -75,6 +76,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     ReportsModule,
     PublicModule,
     OutreachModule,
+    InvestmentsModule,
   ],
 })
 export class AppModule {}

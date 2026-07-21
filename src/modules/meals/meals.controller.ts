@@ -17,7 +17,6 @@ export class MealsController {
   }
 
   @Post()
-  @Roles('CEO', 'MANAGER')
   record(@Body() dto: MealDto) {
     return this.meals.record(dto);
   }

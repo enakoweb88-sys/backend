@@ -339,6 +339,19 @@ export class MealDto {
 
   @IsEnum(MealStatus)
   status!: MealStatus;
+
+  @IsString()
+  @IsOptional()
+  mealName?: string;
+
+  @IsString()
+  @IsOptional()
+  mealTime?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  price?: number;
 }
 
 // ─── KYC ─────────────────────────────────────────────────────────────────────

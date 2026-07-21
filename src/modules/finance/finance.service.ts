@@ -15,15 +15,7 @@ export class FinanceService {
 
   async getCashPosition() {
     return {
-      chartData: [
-        { day: 'Mon', in: 4000000, out: 2400000 },
-        { day: 'Tue', in: 3000000, out: 1398000 },
-        { day: 'Wed', in: 2000000, out: 9800000 },
-        { day: 'Thu', in: 2780000, out: 3908000 },
-        { day: 'Fri', in: 1890000, out: 4800000 },
-        { day: 'Sat', in: 2390000, out: 3800000 },
-        { day: 'Sun', in: 3490000, out: 4300000 }
-      ]
+      chartData: []
     };
   }
 
@@ -45,13 +37,27 @@ export class FinanceService {
   async getAccountsSummary() {
     const bankAccounts = await this.prisma.bankAccount.findMany();
     const assets = bankAccounts.reduce((a, b) => a + Number(b.balance), 0);
+
+    const expenses = await this.prisma.expense.aggregate({
+      where: { status: 'APPROVED' },
+      _sum: { amount: true }
+    });
+    const revenue = await this.prisma.transaction.aggregate({
+      where: { status: 'SETTLED' },
+      _sum: { amount: true }
+    });
+
+    const expensesYtd = Number(expenses._sum.amount || 0);
+    const revenueYtd = Number(revenue._sum.amount || 0);
+    const netProfit = revenueYtd - expensesYtd;
+
     return {
       assets,
-      liabilities: 45000000,
-      equity: assets - 45000000,
-      revenueYtd: 85000000,
-      expensesYtd: 42000000,
-      netProfit: 43000000
+      liabilities: 0,
+      equity: assets,
+      revenueYtd,
+      expensesYtd,
+      netProfit
     };
   }
 }

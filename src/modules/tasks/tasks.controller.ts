@@ -23,7 +23,6 @@ export class TasksController {
   }
 
   @Post()
-  @Roles('CEO', 'MANAGER')
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: JwtUser) {
     return this.tasks.create(dto, user);
   }

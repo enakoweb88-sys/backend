@@ -30,6 +30,8 @@ enum TaskStatus {
   REVIEW
   DONE
   BLOCKED
+  CANCELLED
+  FAILED
 }
 
 enum TaskPriority {
@@ -159,6 +161,7 @@ model User {
   channelMembers     ChannelMember[]
   addedSubscriptions Subscription[]      @relation("AddedSubscriptions")
   generatedReports   ReportFile[]        @relation("GeneratedReports")
+  dailyReports       DailyReport[]
   userSessions       UserSession[]
   
   // Additional HR Fields
@@ -315,6 +318,8 @@ model MealRecord {
   employeeId     String
   date           DateTime
   status         MealStatus
+  mealName       String?
+  mealTime       String?
   totalAmount    Decimal    @default(1000) @db.Decimal(14, 2)
   companyAmount  Decimal    @default(500) @db.Decimal(14, 2)
   employeeAmount Decimal    @default(500) @db.Decimal(14, 2)
@@ -327,6 +332,22 @@ model MealRecord {
   @@index([employeeId])
   @@index([status])
   @@map("meal_records")
+}
+
+model DailyReport {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @default(now())
+  content   String   @db.Text
+  loginTime DateTime?
+  logoutTime DateTime?
+  pdfUrl    String?
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("daily_reports")
 }
 
 // ─── KYC ─────────────────────────────────────────────────────────────────────
@@ -944,4 +965,19 @@ model FloatAccount {
   updatedAt DateTime @updatedAt
 
   @@map("float_accounts")
+}
+
+// ─── Investments ─────────────────────────────────────────────────────────────
+
+model Investment {
+  id        String   @id @default(cuid())
+  title     String
+  category  String
+  amount    Decimal  @default(0) @db.Decimal(14, 2)
+  weight    Decimal  @default(0) @db.Decimal(5, 2)
+  color     String   @default("bg-primary")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("investments")
 }

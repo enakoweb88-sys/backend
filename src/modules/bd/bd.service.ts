@@ -36,7 +36,7 @@ export class BdService {
       target,
       achieved,
       remaining: Math.max(0, target - achieved),
-      daysLeft: 14,
+      daysLeft: 0,
       sources: [],
       topServices: []
     };

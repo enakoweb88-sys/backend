@@ -25,16 +25,29 @@ export class MealsService {
   }
 
   record(dto: MealDto) {
+    const totalAmount = dto.price ?? 1000;
+    const companyAmount = Math.floor(totalAmount / 2);
+    const employeeAmount = Math.ceil(totalAmount / 2);
+
     return this.prisma.mealRecord.upsert({
       where: { employeeId_date: { employeeId: dto.employeeId, date: new Date(dto.date) } },
-      update: { status: dto.status as MealStatus },
+      update: { 
+        status: dto.status as MealStatus,
+        mealName: dto.mealName,
+        mealTime: dto.mealTime,
+        totalAmount,
+        companyAmount,
+        employeeAmount,
+      },
       create: {
         employeeId: dto.employeeId,
         date: new Date(dto.date),
         status: dto.status as MealStatus,
-        totalAmount: 1000,
-        companyAmount: 500,
-        employeeAmount: 500,
+        mealName: dto.mealName,
+        mealTime: dto.mealTime,
+        totalAmount,
+        companyAmount,
+        employeeAmount,
       },
     });
   }

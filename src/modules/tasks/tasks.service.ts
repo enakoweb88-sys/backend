@@ -38,16 +38,14 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, user: JwtUser) {
-    if (user.role === RoleName.EMPLOYEE) {
-      throw new ForbiddenException('Employees cannot create tasks');
-    }
+    const assigneeId = dto.assigneeId || user.sub;
     const task = await this.prisma.task.create({
       data: {
         title: dto.title,
         description: dto.description,
         priority: dto.priority ?? TaskPriority.NORMAL,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-        assigneeId: dto.assigneeId,
+        assigneeId,
         creatorId: user.sub,
       },
       include: {

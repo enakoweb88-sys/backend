@@ -295,6 +295,60 @@ async function main() {
     });
   }
 
+  // Bank Accounts
+  if ((await prisma.bankAccount.count()) === 0) {
+    await prisma.bankAccount.createMany({
+      data: [
+        { name: 'Main Operating Account', bank: 'UBA Cameroon', accountNo: '10023XXXX', balance: 145000000, type: 'CHECKING' },
+        { name: 'Payroll Account', bank: 'Ecobank', accountNo: '04321XXXX', balance: 45000000, type: 'SAVINGS' },
+        { name: 'Reserve Account', bank: 'Afriland First Bank', accountNo: '88392XXXX', balance: 80000000, type: 'SAVINGS' },
+      ]
+    });
+  }
+
+  // Investments
+  if ((await prisma.investment.count()) === 0) {
+    await prisma.investment.createMany({
+      data: [
+        { title: 'S&P 500 ETF', category: 'Equities', amount: 450000, weight: 25.5, color: '#2563eb' },
+        { title: 'African Tech Fund', category: 'VC', amount: 800000, weight: 45.3, color: '#10b981' },
+        { title: 'Cameroon Govt Bonds', category: 'Fixed Income', amount: 250000, weight: 14.2, color: '#f59e0b' },
+      ]
+    });
+  }
+
+  // Invoices
+  if ((await prisma.invoice.count()) === 0) {
+    await prisma.invoice.createMany({
+      data: [
+        { client: 'Acme Corp', amount: 1500000, status: 'Paid', dueDate: new Date('2026-06-05') },
+        { client: 'Tech Hub Ltd', amount: 800000, status: 'Pending', dueDate: new Date('2026-06-12') },
+        { client: 'Global Logistics', amount: 2500000, status: 'Overdue', dueDate: new Date('2026-05-30') },
+      ]
+    });
+  }
+
+  // Transactions
+  if ((await prisma.transaction.count()) === 0) {
+    await prisma.transaction.createMany({
+      data: [
+        { amount: 500000, type: 'CREDIT', status: 'SETTLED', reference: 'TRX-101', entity: 'Finance', description: '' },
+        { amount: 1500000, type: 'CREDIT', status: 'SETTLED', reference: 'TRX-102', entity: 'Sales', description: '' },
+        { amount: 200000, type: 'CREDIT', status: 'SETTLED', reference: 'TRX-103', entity: 'Sales', description: '' },
+      ]
+    });
+  }
+
+  // Expenses
+  if ((await prisma.expense.count()) === 0) {
+    await prisma.expense.createMany({
+      data: [
+        { description: 'Office Supplies', category: 'Operations', amount: 50000, status: 'APPROVED', submittedById: ceoUser.id },
+        { description: 'Server Hosting', category: 'IT', amount: 120000, status: 'APPROVED', submittedById: ceoUser.id },
+      ]
+    });
+  }
+
   console.log('✅ Dashboard specific data seeded.');
   console.log('✅ Seeding complete!');
 }

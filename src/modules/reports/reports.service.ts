@@ -41,4 +41,25 @@ export class ReportsService {
       }
     });
   }
+  listDaily(user: JwtUser) {
+    // If manager, fetch all, otherwise fetch own
+    const where = user.role === 'MANAGER' || user.role === 'CEO' ? {} : { userId: user.sub };
+    return this.prisma.dailyReport.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      include: { user: { select: { fullName: true, email: true } } }
+    });
+  }
+
+  createDaily(body: { content: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, user: JwtUser) {
+    return this.prisma.dailyReport.create({
+      data: {
+        content: body.content,
+        loginTime: body.loginTime ? new Date(body.loginTime) : null,
+        logoutTime: body.logoutTime ? new Date(body.logoutTime) : null,
+        pdfUrl: body.pdfUrl,
+        userId: user.sub
+      }
+    });
+  }
 }
