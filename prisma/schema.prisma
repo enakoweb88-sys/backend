@@ -149,6 +149,8 @@ model User {
   sentMessages       Message[]           @relation("SentMessages")
   notifications      Notification[]
   announcements      Announcement[]
+  announcementLikes    AnnouncementLike[]
+  announcementComments AnnouncementComment[]
   performanceMetrics PerformanceMetric[]
   reviewedKyc        KycSubmission[]     @relation("ReviewedKyc")
   approvedKyc        KycSubmission[]     @relation("ApprovedKyc")
@@ -445,19 +447,49 @@ model ChannelMember {
 }
 
 model Announcement {
-  id        String   @id @default(cuid())
+  id        String                @id @default(cuid())
   title     String
   content   String
   tag       String?
-  pinned    Boolean  @default(false)
+  pinned    Boolean               @default(false)
   authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  author    User                  @relation(fields: [authorId], references: [id])
+  likes     AnnouncementLike[]
+  comments  AnnouncementComment[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
   @@index([authorId])
   @@index([pinned, createdAt])
   @@map("announcements")
+}
+
+model AnnouncementLike {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@index([userId])
+  @@map("announcement_likes")
+}
+
+model AnnouncementComment {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  content        String       @db.Text
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([announcementId])
+  @@index([userId])
+  @@map("announcement_comments")
 }
 
 model Notification {
@@ -980,4 +1012,55 @@ model Investment {
   updatedAt DateTime @updatedAt
 
   @@map("investments")
+}
+
+// ─── Cookie & Web Analytics ──────────────────────────────────────────────────
+
+model CookieConsentRecord {
+  id          String   @id @default(cuid())
+  consent     String   // "accepted" | "essential_only"
+  ipHash      String?
+  userAgent   String?
+  country     String?  @default("Cameroon")
+  deviceType  String?  @default("desktop")
+  createdAt   DateTime @default(now())
+
+  @@map("cookie_consent_records")
+}
+
+model WebAnalyticsEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // "pageview" | "click" | "scroll" | "campaign"
+  path        String
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  clickX      Float?   // Heatmap X percentage (0-100)
+  clickY      Float?   // Heatmap Y percentage (0-100)
+  scrollDepth Int?     // Percentage (0-100)
+  duration    Int?     // Session time in seconds
+  deviceType  String?  @default("desktop")
+  country     String?  @default("Cameroon")
+  createdAt   DateTime @default(now())
+
+  @@map("web_analytics_events")
+}
+
+model CommunityProject {
+  id            String   @id @default(cuid())
+  title         String
+  description   String   @db.Text
+  communitySlug String
+  targetAmount  Decimal  @default(0) @db.Decimal(14, 2)
+  currentAmount Decimal  @default(0) @db.Decimal(14, 2)
+  status        String   @default("In Progress")
+  coverImage    String?
+  videoUrl      String?
+  images        String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([communitySlug])
+  @@map("community_projects")
 }

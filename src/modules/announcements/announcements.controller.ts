@@ -12,19 +12,29 @@ export class AnnouncementsController {
   constructor(private readonly announcements: AnnouncementsService) {}
 
   @Get()
-  list(@Query() query: QueryDto) {
-    return this.announcements.list(query);
+  list(@Query() query: QueryDto, @CurrentUser() user: JwtUser) {
+    return this.announcements.list(query, user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.announcements.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.announcements.findOne(id, user);
   }
 
   @Post()
   @Roles('CEO', 'MANAGER')
   create(@Body() dto: CreateAnnouncementDto, @CurrentUser() user: JwtUser) {
     return this.announcements.create(dto, user);
+  }
+
+  @Post(':id/like')
+  toggleLike(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.announcements.toggleLike(id, user);
+  }
+
+  @Post(':id/comments')
+  addComment(@Param('id') id: string, @Body('content') content: string, @CurrentUser() user: JwtUser) {
+    return this.announcements.addComment(id, content, user);
   }
 
   @Patch(':id')

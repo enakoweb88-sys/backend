@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { OutreachService } from './outreach.service';
 
 @Controller('outreach')
@@ -70,5 +70,42 @@ export class OutreachController {
   @Post('posts/:id/status')
   async updatePostStatus(@Param('id') id: string, @Body() data: { status: string }) {
     return this.outreachService.updatePostStatus(id, data.status);
+  }
+
+  // --- Analytics & Cookie Tracking ---
+  @Post('analytics/consent')
+  async recordCookieConsent(@Body() data: { consent: string; userAgent?: string; deviceType?: string; country?: string }) {
+    return this.outreachService.recordCookieConsent(data);
+  }
+
+  @Post('analytics/event')
+  async recordAnalyticsEvent(@Body() data: any) {
+    return this.outreachService.recordAnalyticsEvent(data);
+  }
+
+  @Get('analytics/insights')
+  async getWebInsights() {
+    return this.outreachService.getWebInsights();
+  }
+
+  // --- Community Projects ---
+  @Get('community-projects')
+  async getCommunityProjects(@Query('communitySlug') communitySlug?: string) {
+    return this.outreachService.getCommunityProjects(communitySlug);
+  }
+
+  @Post('community-projects')
+  async createCommunityProject(@Body() data: any) {
+    return this.outreachService.createCommunityProject(data);
+  }
+
+  @Put('community-projects/:id')
+  async updateCommunityProject(@Param('id') id: string, @Body() data: any) {
+    return this.outreachService.updateCommunityProject(id, data);
+  }
+
+  @Delete('community-projects/:id')
+  async deleteCommunityProject(@Param('id') id: string) {
+    return this.outreachService.deleteCommunityProject(id);
   }
 }

@@ -8,8 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AnnouncementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(query: QueryDto) {
-    return this.prisma.announcement.findMany({
+  async list(query: QueryDto, user?: JwtUser) {
+    const items = await this.prisma.announcement.findMany({
       where: query.search
         ? {
             OR: [
@@ -21,19 +21,47 @@ export class AnnouncementsService {
         : {},
       include: {
         author: { select: { fullName: true, role: { select: { name: true } } } },
+        likes: { select: { userId: true } },
+        comments: {
+          include: {
+            user: { select: { fullName: true, role: { select: { name: true } } } }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
       },
       orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
       take: query.limit ?? 50,
     });
+
+    return items.map((a) => ({
+      ...a,
+      likesCount: a.likes.length,
+      likedByMe: user ? a.likes.some((l) => l.userId === user.sub) : false,
+      commentsCount: a.comments.length,
+    }));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: JwtUser) {
     const a = await this.prisma.announcement.findUnique({
       where: { id },
-      include: { author: { select: { fullName: true, role: { select: { name: true } } } } },
+      include: {
+        author: { select: { fullName: true, role: { select: { name: true } } } },
+        likes: { select: { userId: true } },
+        comments: {
+          include: {
+            user: { select: { fullName: true, role: { select: { name: true } } } }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      },
     });
     if (!a) throw new NotFoundException('Announcement not found');
-    return a;
+    return {
+      ...a,
+      likesCount: a.likes.length,
+      likedByMe: user ? a.likes.some((l) => l.userId === user.sub) : false,
+      commentsCount: a.comments.length,
+    };
   }
 
   create(dto: CreateAnnouncementDto, user: JwtUser) {
@@ -47,6 +75,52 @@ export class AnnouncementsService {
       },
       include: {
         author: { select: { fullName: true, role: { select: { name: true } } } },
+      },
+    });
+  }
+
+  async toggleLike(id: string, user: JwtUser) {
+    const announcement = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!announcement) throw new NotFoundException('Announcement not found');
+
+    const existingLike = await this.prisma.announcementLike.findUnique({
+      where: {
+        announcementId_userId: {
+          announcementId: id,
+          userId: user.sub,
+        },
+      },
+    });
+
+    if (existingLike) {
+      await this.prisma.announcementLike.delete({
+        where: { id: existingLike.id },
+      });
+      return { liked: false };
+    } else {
+      await this.prisma.announcementLike.create({
+        data: {
+          announcementId: id,
+          userId: user.sub,
+        },
+      });
+      return { liked: true };
+    }
+  }
+
+  async addComment(id: string, content: string, user: JwtUser) {
+    const announcement = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!announcement) throw new NotFoundException('Announcement not found');
+    if (!content || !content.trim()) throw new ForbiddenException('Comment content cannot be empty');
+
+    return this.prisma.announcementComment.create({
+      data: {
+        announcementId: id,
+        userId: user.sub,
+        content: content.trim(),
+      },
+      include: {
+        user: { select: { fullName: true, role: { select: { name: true } } } },
       },
     });
   }

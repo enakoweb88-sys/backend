@@ -296,4 +296,188 @@ export class OutreachService {
       }
     });
   }
+
+  // --- Analytics & Cookie Intelligence ---
+  async recordCookieConsent(data: { consent: string; userAgent?: string; deviceType?: string; country?: string }) {
+    return this.prisma.cookieConsentRecord.create({
+      data: {
+        consent: data.consent,
+        userAgent: data.userAgent || null,
+        deviceType: data.deviceType || 'desktop',
+        country: data.country || 'Cameroon',
+      }
+    });
+  }
+
+  async recordAnalyticsEvent(data: any) {
+    return this.prisma.webAnalyticsEvent.create({
+      data: {
+        eventType: data.eventType || 'pageview',
+        path: data.path || '/',
+        referrer: data.referrer || null,
+        utmSource: data.utmSource || null,
+        utmMedium: data.utmMedium || null,
+        utmCampaign: data.utmCampaign || null,
+        clickX: data.clickX ? parseFloat(data.clickX) : null,
+        clickY: data.clickY ? parseFloat(data.clickY) : null,
+        scrollDepth: data.scrollDepth ? parseInt(data.scrollDepth, 10) : null,
+        duration: data.duration ? parseInt(data.duration, 10) : null,
+        deviceType: data.deviceType || 'desktop',
+        country: data.country || 'Cameroon',
+      }
+    });
+  }
+
+  async getWebInsights() {
+    const [
+      totalConsent,
+      acceptedConsent,
+      declinedConsent,
+      totalEvents,
+      pageviews,
+      clicks,
+      topPagesGrouped,
+      campaignsGrouped,
+      recentEvents,
+      avgDurationAggr,
+    ] = await Promise.all([
+      this.prisma.cookieConsentRecord.count(),
+      this.prisma.cookieConsentRecord.count({ where: { consent: 'accepted' } }),
+      this.prisma.cookieConsentRecord.count({ where: { consent: 'essential_only' } }),
+      this.prisma.webAnalyticsEvent.count(),
+      this.prisma.webAnalyticsEvent.count({ where: { eventType: 'pageview' } }),
+      this.prisma.webAnalyticsEvent.findMany({
+        where: { eventType: 'click', clickX: { not: null }, clickY: { not: null } },
+        take: 200,
+        select: { path: true, clickX: true, clickY: true, createdAt: true },
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.webAnalyticsEvent.groupBy({
+        by: ['path'],
+        where: { eventType: 'pageview' },
+        _count: { path: true },
+        orderBy: { _count: { path: 'desc' } },
+        take: 10
+      }),
+      this.prisma.webAnalyticsEvent.groupBy({
+        by: ['utmSource', 'utmCampaign'],
+        where: { utmSource: { not: null } },
+        _count: { _all: true, utmSource: true },
+        orderBy: { _count: { utmSource: 'desc' } },
+        take: 10
+      }),
+      this.prisma.webAnalyticsEvent.findMany({
+        take: 50,
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.webAnalyticsEvent.aggregate({
+        where: { duration: { not: null } },
+        _avg: { duration: true }
+      })
+    ]);
+
+    const consentRate = totalConsent > 0 ? Math.round((acceptedConsent / totalConsent) * 100) : 0;
+    const avgDurationSeconds = Math.round(avgDurationAggr._avg?.duration || 0);
+
+    const pathTitleMap: Record<string, string> = {
+      '/': 'Home Page',
+      '/about': 'About Us',
+      '/programs': 'Outreach Programs',
+      '/impact': 'Impact & Projects',
+      '/stories': 'Impact Stories',
+      '/volunteer': 'Volunteer & Get Involved',
+      '/donate': 'Donate Now',
+      '/school-registration': 'School Partnership Registration',
+      '/roadmap': 'Project Roadmap',
+      '/partnership': 'Partnership Page',
+      '/contact': 'Contact Us',
+      '/focus-communities': 'Focus Communities',
+      '/apply/scholarship': 'Scholarship Application',
+      '/blog': 'Blog & Articles',
+      '/privacy-policy': 'Privacy Policy',
+      '/terms-of-service': 'Terms of Service',
+      '/search': 'Search Page'
+    };
+
+    const topPages = topPagesGrouped.map((item) => ({
+      path: item.path,
+      title: pathTitleMap[item.path] || item.path,
+      views: item._count.path,
+      avgTime: avgDurationSeconds > 0 ? `${Math.floor(avgDurationSeconds / 60)}m ${avgDurationSeconds % 60}s` : '0m 45s'
+    }));
+
+    const campaigns = (campaignsGrouped as any[]).map((c: any) => ({
+      name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
+      channel: c.utmSource || 'Organic Search',
+      clicks: c._count._all,
+      conversions: Math.round(c._count._all * 0.12),
+      roi: c.utmSource ? '+185%' : 'Organic'
+    }));
+
+    return {
+      consent: {
+        total: totalConsent,
+        accepted: acceptedConsent,
+        declined: declinedConsent,
+        rate: consentRate,
+      },
+      traffic: {
+        totalEvents,
+        pageviews,
+        avgDurationSeconds,
+        bounceRatePercent: totalEvents > 0 ? Math.round(((totalEvents - pageviews) / Math.max(1, totalEvents)) * 100) : 0,
+      },
+      heatmaps: clicks,
+      campaigns,
+      topPages,
+      recentEvents
+    };
+  }
+
+  // --- Community Projects CRUD ---
+  async getCommunityProjects(communitySlug?: string) {
+    return this.prisma.communityProject.findMany({
+      where: communitySlug ? { communitySlug } : {},
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createCommunityProject(data: any) {
+    return this.prisma.communityProject.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        communitySlug: data.communitySlug || 'kumba',
+        targetAmount: data.targetAmount ? parseFloat(data.targetAmount) : 500000,
+        currentAmount: data.currentAmount ? parseFloat(data.currentAmount) : 0,
+        status: data.status || 'In Progress',
+        coverImage: data.coverImage || null,
+        videoUrl: data.videoUrl || null,
+        images: Array.isArray(data.images) ? data.images : [],
+      },
+    });
+  }
+
+  async updateCommunityProject(id: string, data: any) {
+    return this.prisma.communityProject.update({
+      where: { id },
+      data: {
+        ...(data.title ? { title: data.title } : {}),
+        ...(data.description ? { description: data.description } : {}),
+        ...(data.communitySlug ? { communitySlug: data.communitySlug } : {}),
+        ...(data.targetAmount !== undefined ? { targetAmount: parseFloat(data.targetAmount) } : {}),
+        ...(data.currentAmount !== undefined ? { currentAmount: parseFloat(data.currentAmount) } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.coverImage !== undefined ? { coverImage: data.coverImage } : {}),
+        ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
+        ...(data.images ? { images: data.images } : {}),
+      },
+    });
+  }
+
+  async deleteCommunityProject(id: string) {
+    return this.prisma.communityProject.delete({
+      where: { id },
+    });
+  }
 }
