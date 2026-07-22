@@ -443,6 +443,27 @@ export class OutreachService {
   }
 
   async createCommunityProject(data: any) {
+    // Upload cover image if it's base64
+    let coverImageUrl: string | null = null;
+    if (data.coverImage && data.coverImage.startsWith('data:')) {
+      coverImageUrl = await this.uploadToSupabase(data.coverImage, 'project-cover');
+    } else if (data.coverImage) {
+      coverImageUrl = data.coverImage; // Already a URL
+    }
+
+    // Upload extra images if they are base64
+    const imageUrls: string[] = [];
+    if (Array.isArray(data.images)) {
+      for (const img of data.images) {
+        if (img && img.startsWith('data:')) {
+          const url = await this.uploadToSupabase(img, 'project-photo');
+          if (url) imageUrls.push(url);
+        } else if (img) {
+          imageUrls.push(img); // Already a URL
+        }
+      }
+    }
+
     return this.prisma.communityProject.create({
       data: {
         title: data.title,
@@ -451,14 +472,36 @@ export class OutreachService {
         targetAmount: data.targetAmount ? parseFloat(data.targetAmount) : 500000,
         currentAmount: data.currentAmount ? parseFloat(data.currentAmount) : 0,
         status: data.status || 'In Progress',
-        coverImage: data.coverImage || null,
+        coverImage: coverImageUrl,
         videoUrl: data.videoUrl || null,
-        images: Array.isArray(data.images) ? data.images : [],
+        images: imageUrls,
       },
     });
   }
 
   async updateCommunityProject(id: string, data: any) {
+    // Upload cover image if base64
+    let coverImage = data.coverImage;
+    if (coverImage && coverImage.startsWith('data:')) {
+      const url = await this.uploadToSupabase(coverImage, 'project-cover');
+      if (url) coverImage = url;
+    }
+
+    // Upload extra images if base64
+    let images = data.images;
+    if (Array.isArray(images)) {
+      const uploadedImages: string[] = [];
+      for (const img of images) {
+        if (img && img.startsWith('data:')) {
+          const url = await this.uploadToSupabase(img, 'project-photo');
+          if (url) uploadedImages.push(url);
+        } else if (img) {
+          uploadedImages.push(img);
+        }
+      }
+      images = uploadedImages;
+    }
+
     return this.prisma.communityProject.update({
       where: { id },
       data: {
@@ -468,9 +511,9 @@ export class OutreachService {
         ...(data.targetAmount !== undefined ? { targetAmount: parseFloat(data.targetAmount) } : {}),
         ...(data.currentAmount !== undefined ? { currentAmount: parseFloat(data.currentAmount) } : {}),
         ...(data.status ? { status: data.status } : {}),
-        ...(data.coverImage !== undefined ? { coverImage: data.coverImage } : {}),
+        ...(coverImage !== undefined ? { coverImage } : {}),
         ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
-        ...(data.images ? { images: data.images } : {}),
+        ...(images ? { images } : {}),
       },
     });
   }
