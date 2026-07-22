@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { join } from 'path';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,22 +14,21 @@ async function bootstrap() {
   const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? [];
 
   app.setGlobalPrefix('api/v1');
+
+  // Increase body size limit to 50mb to prevent "Request entity too large" error when uploading blog posts & cover photos
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
+
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cookieParser());
+
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || origin.match(/localhost|127\.0\.0\.1|vercel\.app/)) {
-        callback(null, true);
-      } else if (corsOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
+    origin: true, // Allow all origins for seamless cross-domain outreach API access
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
