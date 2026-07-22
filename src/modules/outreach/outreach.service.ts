@@ -241,8 +241,9 @@ export class OutreachService {
   }
 
   async createPost(data: any) {
+    // Priority: direct URL from frontend upload > base64 fallback
     let coverImage = data.coverImage || null;
-    if (data.coverImageBase64) {
+    if (!coverImage && data.coverImageBase64) {
       const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
       if (url) coverImage = url;
     }
@@ -258,7 +259,7 @@ export class OutreachService {
         coverImage,
         images: data.images || [],
         video: data.video || null,
-        author: data.author || 'ENAKO OS',
+        author: data.author || 'ENAKO Outreach Team',
         status: data.status || 'DRAFT',
         publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
       }
@@ -266,8 +267,9 @@ export class OutreachService {
   }
 
   async updatePost(id: string, data: any) {
-    let coverImage = data.coverImage;
-    if (data.coverImageBase64) {
+    // Priority: direct URL from frontend upload > base64 fallback
+    let coverImage = data.coverImage || null;
+    if (!coverImage && data.coverImageBase64) {
       const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
       if (url) coverImage = url;
     }
@@ -279,6 +281,7 @@ export class OutreachService {
         content: data.content,
         category: data.category,
         ...(coverImage && { coverImage }),
+        author: data.author || undefined,
         images: data.images,
         video: data.video,
         status: data.status,
