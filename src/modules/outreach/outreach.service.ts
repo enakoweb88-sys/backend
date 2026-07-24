@@ -91,7 +91,7 @@ export class OutreachService {
           OR: [
             { title: { contains: searchStr, mode: 'insensitive' } },
             { description: { contains: searchStr, mode: 'insensitive' } },
-            { location: { contains: searchStr, mode: 'insensitive' } }
+            { titleFr: { contains: searchStr, mode: 'insensitive' } }
           ]
         },
         take: 5
@@ -100,7 +100,7 @@ export class OutreachService {
         where: {
           OR: [
             { title: { contains: searchStr, mode: 'insensitive' } },
-            { excerpt: { contains: searchStr, mode: 'insensitive' } }
+            { content: { contains: searchStr, mode: 'insensitive' } }
           ]
         },
         take: 5
@@ -109,7 +109,7 @@ export class OutreachService {
         where: {
           OR: [
             { applicantName: { contains: searchStr, mode: 'insensitive' } },
-            { applicantEmail: { contains: searchStr, mode: 'insensitive' } }
+            { email: { contains: searchStr, mode: 'insensitive' } }
           ]
         },
         take: 5
@@ -128,7 +128,7 @@ export class OutreachService {
         id: e.id,
         type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT',
         title: e.title,
-        subtitle: `Location: ${e.location}`,
+        subtitle: `Type: ${e.type}`,
         link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events'
       })),
       ...blogs.map(b => ({
