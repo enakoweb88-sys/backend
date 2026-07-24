@@ -16,6 +16,142 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async globalSearch(query: string, user: JwtUser) {
+    if (!query || query.trim() === '') return [];
+    
+    const searchStr = query.trim();
+    const role = (user.role || '').toUpperCase();
+
+    // Role-Based Access Control logic for the search feature
+    const isManagement = ['CEO', 'MANAGER', 'ADMIN'].includes(role);
+    const isFinance = isManagement || role === 'FINANCE';
+    const isOutreach = isManagement || role === 'OUTREACH_MANAGER';
+    const isSupport = isManagement || role === 'SUPPORT';
+
+    const [
+      users,
+      transactions,
+      expenses,
+      announcements,
+      tickets,
+      projects,
+      events,
+      blogs,
+      applications,
+      stats
+    ] = await Promise.all([
+      // 1. Users (Basic employee info accessible to everyone)
+      this.prisma.user.findMany({
+        where: {
+          OR: [
+            { fullName: { contains: searchStr, mode: 'insensitive' } },
+            { email: { contains: searchStr, mode: 'insensitive' } },
+            { title: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }),
+      // 2. Transactions (Finance & Management)
+      isFinance ? this.prisma.transaction.findMany({
+        where: {
+          OR: [
+            { id: { contains: searchStr, mode: 'insensitive' } },
+            { type: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 3. Expenses (Finance & Management)
+      isFinance ? this.prisma.expense.findMany({
+        where: {
+          OR: [
+            { description: { contains: searchStr, mode: 'insensitive' } },
+            { category: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 4. Announcements (Accessible to all)
+      this.prisma.announcement.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { content: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }),
+      // 5. Support Tickets (Support & Management)
+      isSupport ? this.prisma.supportTicket.findMany({
+        where: {
+          OR: [
+            { subject: { contains: searchStr, mode: 'insensitive' } },
+            { description: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 6. Outreach Projects (Outreach & Management)
+      isOutreach ? this.prisma.communityProject.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { communitySlug: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 7. Outreach Events
+      isOutreach ? this.prisma.outreachEvent.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { titleFr: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 8. Outreach Blogs
+      isOutreach ? this.prisma.blogPost.findMany({
+        where: { OR: [{ title: { contains: searchStr, mode: 'insensitive' } }] },
+        take: 3
+      }) : Promise.resolve([]),
+      // 9. Outreach Applications
+      isOutreach ? this.prisma.outreachApplication.findMany({
+        where: {
+          OR: [
+            { applicantName: { contains: searchStr, mode: 'insensitive' } },
+            { email: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+      // 10. Outreach Stats
+      isOutreach ? this.prisma.publicImpactStat.findMany({
+        where: {
+          OR: [
+            { label: { contains: searchStr, mode: 'insensitive' } },
+            { value: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 3
+      }) : Promise.resolve([]),
+    ]);
+
+    return [
+      ...users.map(u => ({ id: u.id, type: 'EMPLOYEE', title: u.fullName, subtitle: u.title || u.email, link: '/app/employees' })),
+      ...transactions.map(t => ({ id: t.id, type: 'TRANSACTION', title: `Transaction: ${t.type}`, subtitle: `Status: ${t.status}`, link: '/app/transactions' })),
+      ...expenses.map(e => ({ id: e.id, type: 'EXPENSE', title: e.description, subtitle: `Category: ${e.category}`, link: '/app/expenses' })),
+      ...announcements.map(a => ({ id: a.id, type: 'ANNOUNCEMENT', title: a.title, subtitle: `By: ${a.authorId}`, link: '/app/announcements' })),
+      ...tickets.map(t => ({ id: t.id, type: 'SUPPORT TICKET', title: t.subject, subtitle: `Status: ${t.status}`, link: '/app/tickets' })),
+      ...projects.map(p => ({ id: p.id, type: 'COMMUNITY PROJECT', title: p.title, subtitle: `Community: ${p.communitySlug}`, link: '/app/outreach/projects' })),
+      ...events.map(e => ({ id: e.id, type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT', title: e.title, subtitle: `Type: ${e.type}`, link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events' })),
+      ...blogs.map(b => ({ id: b.id, type: 'BLOG POST', title: b.title, subtitle: `Status: ${b.status}`, link: '/app/outreach/cms' })),
+      ...applications.map(a => ({ id: a.id, type: 'APPLICATION', title: a.applicantName, subtitle: `Track: ${a.type}`, link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications' })),
+      ...stats.map(s => ({ id: s.id, type: 'IMPACT STAT', title: s.label, subtitle: `Value: ${s.value}`, link: '/app/outreach/stats' }))
+    ];
+  }
+
   /** CEO / Manager dashboard: aggregated company-wide stats */
   async getOverview() {
     const [

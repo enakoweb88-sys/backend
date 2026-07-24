@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, UseGuards, UseInterceptors, Query } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -9,6 +9,11 @@ import { DashboardService } from './dashboard.service';
 @UseInterceptors(CacheInterceptor)
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
+
+  @Get('search')
+  async globalSearch(@Query('q') query: string, @CurrentUser() user: JwtUser) {
+    return this.dashboard.globalSearch(query, user);
+  }
 
   @Get('overview')
   overview() {
