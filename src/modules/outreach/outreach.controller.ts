@@ -5,6 +5,11 @@ import { OutreachService } from './outreach.service';
 export class OutreachController {
   constructor(private readonly outreachService: OutreachService) {}
 
+  @Get('search')
+  async globalSearch(@Query('q') query: string) {
+    return this.outreachService.globalSearch(query);
+  }
+
   @Post('donations')
   async createDonation(@Body() data: any) {
     return this.outreachService.createDonation(data);

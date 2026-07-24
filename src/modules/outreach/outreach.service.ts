@@ -62,9 +62,92 @@ export class OutreachService {
     return this.prisma.donation.create({
       data: {
         ...cleanData,
-        documents: documentUrls
-      },
+        documents: documentUrls,
+        status: 'COMPLETED'
+      }
     });
+  }
+
+  async globalSearch(query: string) {
+    if (!query || query.trim() === '') {
+      return [];
+    }
+    
+    const searchStr = query.trim();
+    
+    const [projects, events, blogs, applications] = await Promise.all([
+      this.prisma.communityProject.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { description: { contains: searchStr, mode: 'insensitive' } },
+            { communitySlug: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 5
+      }),
+      this.prisma.outreachEvent.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { description: { contains: searchStr, mode: 'insensitive' } },
+            { location: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 5
+      }),
+      this.prisma.blogPost.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { excerpt: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 5
+      }),
+      this.prisma.outreachApplication.findMany({
+        where: {
+          OR: [
+            { applicantName: { contains: searchStr, mode: 'insensitive' } },
+            { applicantEmail: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 5
+      })
+    ]);
+
+    const results = [
+      ...projects.map(p => ({
+        id: p.id,
+        type: 'COMMUNITY PROJECT',
+        title: p.title,
+        subtitle: `Community: ${p.communitySlug}`,
+        link: '/app/outreach/projects'
+      })),
+      ...events.map(e => ({
+        id: e.id,
+        type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT',
+        title: e.title,
+        subtitle: `Location: ${e.location}`,
+        link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events'
+      })),
+      ...blogs.map(b => ({
+        id: b.id,
+        type: 'BLOG POST',
+        title: b.title,
+        subtitle: `Status: ${b.status}`,
+        link: '/app/outreach/cms'
+      })),
+      ...applications.map(a => ({
+        id: a.id,
+        type: 'APPLICATION',
+        title: a.applicantName,
+        subtitle: `Track: ${a.type}`,
+        link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications'
+      }))
+    ];
+
+    return results;
   }
 
   async getDonations() {
