@@ -44,6 +44,8 @@ export class MtnService {
 
   async getAuthToken(): Promise<{ token?: string; error?: string }> {
     try {
+      this.logger.log(`Attempting MTN token fetch: baseUrl=${this.baseUrl}, apiUser=${this.apiUser ? '***SET***' : 'EMPTY'}, apiKey=${this.apiKey ? '***SET***' : 'EMPTY'}, primaryKey=${this.primaryKey ? '***SET***' : 'EMPTY'}`);
+      
       const response = await axios.post(
         `${this.baseUrl}/collection/token/`,
         {},
@@ -58,10 +60,11 @@ export class MtnService {
         }
       );
 
+      this.logger.log('MTN token fetched successfully');
       return { token: response.data.access_token };
     } catch (error: any) {
-      this.logger.error('Error getting token:', error.response?.data || error.message);
-      return { error: 'Failed to fetch token' };
+      this.logger.error('Error getting MTN token:', error.response?.status, error.response?.data || error.message);
+      return { error: `Failed to fetch token: ${error.response?.status} - ${JSON.stringify(error.response?.data || error.message)}` };
     }
   }
 

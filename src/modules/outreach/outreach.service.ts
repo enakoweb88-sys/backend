@@ -85,8 +85,9 @@ export class OutreachService {
 
       if (response.error || !response.uuid) {
         // Mark as failed
+        console.error('MTN Payment initiation failed:', response.error);
         await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new Error('Failed to initiate MTN Payment');
+        throw new Error(response.error || 'Failed to initiate MTN Payment');
       }
 
       return {
