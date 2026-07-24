@@ -105,13 +105,13 @@ export class OutreachService {
   }
 
   async getDonationStatus(uuid: string, token: string, donationId: string) {
-    const response = await this.mtnService.getPaymentStatus(uuid, token);
+    const result = await this.mtnService.checkPaymentStatus(uuid, token);
     
-    if (response.error || !response.data) {
+    if (!result) {
       return { status: 'UNKNOWN' };
     }
 
-    const moMoStatus = response.data.status;
+    const moMoStatus = result.status;
     
     if (moMoStatus === 'SUCCESSFUL') {
       await this.prisma.donation.update({
