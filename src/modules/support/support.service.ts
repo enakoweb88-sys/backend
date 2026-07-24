@@ -48,6 +48,11 @@ export class SupportService {
         where: { id: ticketId },
         data: { status: 'Resolved' } // Auto resolve on admin reply for simplicity
       });
+    } else {
+      await this.prisma.supportTicket.update({
+        where: { id: ticketId },
+        data: { status: 'New' } // Shift back to new for admin review
+      });
     }
 
     return reply;

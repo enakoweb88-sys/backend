@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Param, UseGuards } from '@nestjs/common';
 import { SupportService } from './support.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
+import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 
 @Controller('support')
 export class SupportController {
@@ -24,7 +25,8 @@ export class SupportController {
 
   @UseGuards(JwtAuthGuard)
   @Post('tickets/:id/reply')
-  async reply(@Param('id') id: string, @Body('message') message: string) {
-    return this.supportService.addReply(id, message, true);
+  async reply(@Param('id') id: string, @Body('message') message: string, @CurrentUser() user: JwtUser) {
+    const isAdmin = user.role === 'CEO' || user.role === 'MANAGER' || user.role === 'SUPPORT';
+    return this.supportService.addReply(id, message, isAdmin);
   }
 }
