@@ -219,7 +219,8 @@ export class OutreachService {
         storyDescription: data.storyDescription || null,
         storyDescriptionFr: data.storyDescriptionFr || null,
         storyMediaUrl,
-        storyMediaType: data.storyMediaType || null
+        storyMediaType: data.storyMediaType || null,
+        customFields: data.customFields || null
       }
     });
   }

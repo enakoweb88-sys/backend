@@ -878,6 +878,7 @@ model OutreachEvent {
   storyDescriptionFr  String?
   storyMediaUrl       String?
   storyMediaType      String?    // 'IMAGE' or 'VIDEO'
+  customFields        Json?      // e.g., [{ name: "waec_cert", label: "WAEC Certificate", type: "file", required: true }]
 
   applications OutreachApplication[]
   createdAt    DateTime            @default(now())
