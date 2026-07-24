@@ -981,6 +981,7 @@ model Donation {
   email     String
   phone     String
   status    TransactionStatus @default(PENDING)
+  currency  String            @default("XAF")
   documents String[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt

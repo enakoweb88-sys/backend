@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { createClient } from '@supabase/supabase-js';
 import { OutreachApplicationType, ApplicationStatus } from '@prisma/client';
+import { MtnService } from './mtn.service';
 
 @Injectable()
 export class OutreachService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mtnService: MtnService
+  ) {}
 
   private async uploadToSupabase(base64Data: string, prefix: string): Promise<string | null> {
     if (!base64Data || !base64Data.startsWith('data:')) return null;
@@ -57,15 +61,73 @@ export class OutreachService {
       if (url) documentUrls.push(url);
     }
 
-    const { documents, documentBase64, ...cleanData } = data;
-
-    return this.prisma.donation.create({
+    const { documents, documentBase64, phone, ...cleanData } = data;
+    
+    // Create the donation record with PENDING status initially
+    const donation = await this.prisma.donation.create({
       data: {
         ...cleanData,
+        phone,
         documents: documentUrls,
-        status: 'COMPLETED'
+        status: cleanData.method === 'BANK' ? 'PENDING' : 'PENDING'
       }
     });
+
+    if (cleanData.method === 'MTN') {
+      const response = await this.mtnService.requestToPay({
+        amount: cleanData.amount,
+        currency: cleanData.currency,
+        externalId: donation.id,
+        phone: phone || '', // Ensure it has 237 prefix usually
+        payerMessage: `Donation for ${cleanData.sector}`,
+        payeeMessage: 'Thank you for your donation'
+      });
+
+      if (response.error || !response.uuid) {
+        // Mark as failed
+        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
+        throw new Error('Failed to initiate MTN Payment');
+      }
+
+      return {
+        donation,
+        paymentToken: response.token,
+        paymentUuid: response.uuid,
+        status: 'PENDING'
+      };
+    }
+
+    // For Bank transfer, we can just return it as pending or completed based on your flow
+    return {
+      donation,
+      status: 'PENDING' // They will contact via email
+    };
+  }
+
+  async getDonationStatus(uuid: string, token: string, donationId: string) {
+    const response = await this.mtnService.getPaymentStatus(uuid, token);
+    
+    if (response.error || !response.data) {
+      return { status: 'UNKNOWN' };
+    }
+
+    const moMoStatus = response.data.status;
+    
+    if (moMoStatus === 'SUCCESSFUL') {
+      await this.prisma.donation.update({
+        where: { id: donationId },
+        data: { status: 'SETTLED' }
+      });
+      return { status: 'SETTLED' };
+    } else if (moMoStatus === 'FAILED') {
+      await this.prisma.donation.update({
+        where: { id: donationId },
+        data: { status: 'FAILED' }
+      });
+      return { status: 'FAILED' };
+    }
+
+    return { status: 'PENDING' };
   }
 
   async globalSearch(query: string) {

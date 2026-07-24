@@ -15,6 +15,15 @@ export class OutreachController {
     return this.outreachService.createDonation(data);
   }
 
+  @Get('donations/status/:uuid')
+  async getDonationStatus(
+    @Param('uuid') uuid: string,
+    @Query('token') token: string,
+    @Query('donationId') donationId: string
+  ) {
+    return this.outreachService.getDonationStatus(uuid, token, donationId);
+  }
+
   @Get('donations')
   async getDonations() {
     return this.outreachService.getDonations();
