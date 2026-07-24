@@ -341,6 +341,7 @@ model DailyReport {
   userId    String
   date      DateTime @default(now())
   content   String   @db.Text
+  type      String   @default("DAILY")
   loginTime DateTime?
   logoutTime DateTime?
   pdfUrl    String?

@@ -28,7 +28,7 @@ export class ReportsController {
   }
 
   @Post('daily')
-  createDaily(@Body() body: { content: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, @CurrentUser() user: JwtUser) {
+  createDaily(@Body() body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, @CurrentUser() user: JwtUser) {
     return this.reportsService.createDaily(body, user);
   }
 }

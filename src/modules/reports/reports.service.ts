@@ -42,19 +42,40 @@ export class ReportsService {
     });
   }
   listDaily(user: JwtUser) {
-    // If manager, fetch all, otherwise fetch own
-    const where = user.role === 'MANAGER' || user.role === 'CEO' ? {} : { userId: user.sub };
+    if (user.role === 'CEO') {
+      return this.prisma.dailyReport.findMany({
+        where: { type: 'GENERAL' },
+        orderBy: { date: 'desc' },
+        include: { user: { select: { fullName: true, email: true, role: true } } }
+      });
+    }
+
+    if (user.role === 'MANAGER' || user.role === 'OUTREACH_MANAGER') {
+      return this.prisma.dailyReport.findMany({
+        where: {
+          OR: [
+            { type: 'DAILY' },
+            { userId: user.sub }
+          ]
+        },
+        orderBy: { date: 'desc' },
+        include: { user: { select: { fullName: true, email: true, role: true } } }
+      });
+    }
+
+    // Default to employee
     return this.prisma.dailyReport.findMany({
-      where,
+      where: { userId: user.sub },
       orderBy: { date: 'desc' },
-      include: { user: { select: { fullName: true, email: true } } }
+      include: { user: { select: { fullName: true, email: true, role: true } } }
     });
   }
 
-  createDaily(body: { content: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, user: JwtUser) {
+  createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, user: JwtUser) {
     return this.prisma.dailyReport.create({
       data: {
         content: body.content,
+        type: body.type || 'DAILY',
         loginTime: body.loginTime ? new Date(body.loginTime) : null,
         logoutTime: body.logoutTime ? new Date(body.logoutTime) : null,
         pdfUrl: body.pdfUrl,
