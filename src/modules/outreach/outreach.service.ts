@@ -75,7 +75,7 @@ export class OutreachService {
     
     const searchStr = query.trim();
     
-    const [projects, events, blogs, applications] = await Promise.all([
+    const [projects, events, blogs, applications, stats] = await Promise.all([
       this.prisma.communityProject.findMany({
         where: {
           OR: [
@@ -113,6 +113,15 @@ export class OutreachService {
           ]
         },
         take: 5
+      }),
+      this.prisma.publicImpactStat.findMany({
+        where: {
+          OR: [
+            { label: { contains: searchStr, mode: 'insensitive' } },
+            { value: { contains: searchStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 5
       })
     ]);
 
@@ -144,6 +153,13 @@ export class OutreachService {
         title: a.applicantName,
         subtitle: `Track: ${a.type}`,
         link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications'
+      })),
+      ...stats.map(s => ({
+        id: s.id,
+        type: 'IMPACT STAT',
+        title: s.label,
+        subtitle: `Value: ${s.value}`,
+        link: '/app/outreach/stats'
       }))
     ];
 
