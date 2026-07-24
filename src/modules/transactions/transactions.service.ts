@@ -25,7 +25,20 @@ export class TransactionsService {
     }
     
     if (query.type && query.type !== 'All Types') {
-      where.type = query.type;
+      if (query.type === 'Income') {
+        where.type = { in: ['Receive', 'CREDIT'] };
+      } else if (query.type === 'Expense') {
+        where.type = 'Send';
+      } else {
+        where.type = query.type;
+      }
+    }
+
+    if (query.channel && query.channel !== 'All Channels') {
+      let mappedChannel = query.channel;
+      if (mappedChannel === 'MTN MoMo') mappedChannel = 'MTN';
+      else if (mappedChannel === 'Orange Money') mappedChannel = 'Orange';
+      where.channel = mappedChannel;
     }
 
     if (query.dateRange && query.dateRange !== 'All Dates' && query.dateRange !== 'Custom Range...') {
@@ -41,6 +54,16 @@ export class TransactionsService {
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
         where.createdAt = { gte: start };
       }
+    }
+
+    if (query.specificDate) {
+      const dateStr = query.specificDate;
+      const start = new Date(`${dateStr}T00:00:00.000Z`);
+      const end = new Date(`${dateStr}T23:59:59.999Z`);
+      where.createdAt = {
+        gte: start,
+        lte: end
+      };
     }
 
     const [items, totalsRaw, allTransactions, failedTransactions, recentActivity] = await Promise.all([
