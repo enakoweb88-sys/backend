@@ -30,6 +30,7 @@
     "@nestjs/websockets": "^10.4.20",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.108.2",
+    "axios": "^1.18.1",
     "bcryptjs": "^2.4.3",
     "cache-manager": "^7.2.9",
     "class-transformer": "^0.5.1",

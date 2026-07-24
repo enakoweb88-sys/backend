@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
+import axios from 'axios';
 
 interface RequestToPayProps {
   phone: string;
@@ -26,15 +27,15 @@ export class MtnService {
   }
 
   private get primaryKey() {
-    return process.env.MTN_PRIMARY_KEY || '';
+    return process.env.MTN_PRIMARY_KEY || process.env.PRIMARY_KEY || '';
   }
 
   private get apiUser() {
-    return process.env.MTN_PAYMENTS_API_USER || '';
+    return process.env.MTN_PAYMENTS_API_USER || process.env.PAYMENTS_API_USER || '';
   }
 
   private get apiKey() {
-    return process.env.MTN_PAYMENTS_API_KEY || '';
+    return process.env.MTN_PAYMENTS_API_KEY || process.env.PAYMENTS_API_KEY || '';
   }
 
   private get targetEnvironment() {
@@ -43,24 +44,23 @@ export class MtnService {
 
   async getAuthToken(): Promise<{ token?: string; error?: string }> {
     try {
-      const basicAuth = Buffer.from(`${this.apiUser}:${this.apiKey}`).toString('base64');
-      const response = await fetch(`${this.baseUrl}/collection/token/`, {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': this.primaryKey,
-          'Authorization': `Basic ${basicAuth}`,
-          'Content-Length': '0'
+      const response = await axios.post(
+        `${this.baseUrl}/collection/token/`,
+        {},
+        {
+          headers: {
+            'Ocp-Apim-Subscription-Key': this.primaryKey
+          },
+          auth: {
+            username: this.apiUser,
+            password: this.apiKey
+          }
         }
-      });
+      );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch token: ${await response.text()}`);
-      }
-
-      const data = await response.json();
-      return { token: data.access_token };
-    } catch (error) {
-      this.logger.error('Error getting token:', error);
+      return { token: response.data.access_token };
+    } catch (error: any) {
+      this.logger.error('Error getting token:', error.response?.data || error.message);
       return { error: 'Failed to fetch token' };
     }
   }
@@ -74,16 +74,9 @@ export class MtnService {
     const uuid = crypto.randomUUID();
 
     try {
-      const response = await fetch(`${this.baseUrl}/collection/v1_0/requesttopay`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Reference-Id': uuid,
-          'X-Target-Environment': this.targetEnvironment,
-          'Content-Type': 'application/json',
-          'Ocp-Apim-Subscription-Key': this.primaryKey
-        },
-        body: JSON.stringify({
+      const response = await axios.post(
+        `${this.baseUrl}/collection/v1_0/requesttopay`,
+        {
           amount: amount.toString(),
           currency,
           externalId,
@@ -93,41 +86,48 @@ export class MtnService {
           },
           payerMessage,
           payeeNote: payeeMessage
-        })
-      });
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Reference-Id': uuid,
+            'X-Target-Environment': this.targetEnvironment,
+            'Content-Type': 'application/json',
+            'Ocp-Apim-Subscription-Key': this.primaryKey
+          }
+        }
+      );
 
-      if (!response.ok && response.status !== 202) {
-        throw new Error(`Failed requestToPay: ${await response.text()}`);
-      }
-
-      // 202 means ACCEPTED by MTN
-      return { uuid, data: response.status === 202 ? { status: 'ACCEPTED' } : await response.json().catch(() => ({})), token };
-    } catch (err) {
-      this.logger.error('Error requesting to pay:', err);
-      return { error: 'Failed to request payment' };
+      return { uuid, data: response.data, token };
+    } catch (error: any) {
+      this.logger.error('Failed to submit requestToPay:', error.response?.data || error.message);
+      return { error: 'Failed to submit payment' };
     }
   }
 
-  async getPaymentStatus(uuid: string, token: string): Promise<{ data?: PaymentStatusProps; error?: string }> {
+  async checkPaymentStatus(uuid: string, token: string): Promise<PaymentStatusProps | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/collection/v1_0/requesttopay/${uuid}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Target-Environment': this.targetEnvironment,
-          'Ocp-Apim-Subscription-Key': this.primaryKey
+      const response = await axios.get(
+        `${this.baseUrl}/collection/v1_0/requesttopay/${uuid}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Target-Environment': this.targetEnvironment,
+            'Ocp-Apim-Subscription-Key': this.primaryKey
+          }
         }
-      });
+      );
 
-      if (!response.ok) {
-        throw new Error(`Failed getPaymentStatus: ${await response.text()}`);
-      }
-
-      const result = await response.json();
-      return { data: result as PaymentStatusProps };
-    } catch (err) {
-      this.logger.error('Error getting payment status:', err);
-      return { error: 'Failed to get payment status' };
+      const data = response.data;
+      return {
+        referenceId: data.externalId,
+        status: data.status,
+        financialTransactionId: data.financialTransactionId,
+        reason: data.reason?.message
+      };
+    } catch (error: any) {
+      this.logger.error(`Error checking payment status for ${uuid}:`, error.response?.data || error.message);
+      return null;
     }
   }
 }
