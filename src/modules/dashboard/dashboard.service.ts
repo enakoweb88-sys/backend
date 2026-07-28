@@ -38,18 +38,13 @@ export class DashboardService {
       events,
       blogs,
       applications,
-      stats
+      stats,
+      tasks,
+      kycSubmissions
     ] = await Promise.all([
-      // 1. Users (Basic employee info accessible to everyone)
+      // 1. Users (Smart fuzzy search in JS to handle omitted letters and spaces)
       this.prisma.user.findMany({
-        where: {
-          OR: [
-            { fullName: { contains: searchStr, mode: 'insensitive' } },
-            { email: { contains: searchStr, mode: 'insensitive' } },
-            { title: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 3
+        include: { department: true, role: true }
       }),
       // 2. Transactions (Finance & Management)
       isFinance ? this.prisma.transaction.findMany({
@@ -136,10 +131,54 @@ export class DashboardService {
         },
         take: 3
       }) : Promise.resolve([]),
+      // 11. Tasks
+      this.prisma.task.findMany({
+        where: {
+          OR: [
+            { title: { contains: searchStr, mode: 'insensitive' } },
+            { description: { contains: searchStr, mode: 'insensitive' } }
+          ],
+          ...(isManagement ? {} : { assigneeId: user.sub })
+        },
+        take: 3
+      }),
+      // 12. KYC Submissions
+      (isManagement || isSupport || role === 'BD') ? this.prisma.kycSubmission.findMany() : Promise.resolve([]),
     ]);
 
+    const qLower = searchStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isSubsequence = (search: string, text: string) => {
+      if (!search) return true;
+      if (!text) return false;
+      let searchIdx = 0;
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === search[searchIdx]) searchIdx++;
+        if (searchIdx === search.length) return true;
+      }
+      return false;
+    };
+
+    const smartUsers = users.filter(u => {
+      const name = (u.fullName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const email = (u.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const title = (u.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return isSubsequence(qLower, name) || isSubsequence(qLower, email) || isSubsequence(qLower, title);
+    }).slice(0, 5);
+
+    const smartKyc = kycSubmissions.filter(k => {
+      const name = (k.applicantName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const email = (k.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return isSubsequence(qLower, name) || isSubsequence(qLower, email);
+    }).slice(0, 5);
+
     return [
-      ...users.map(u => ({ id: u.id, type: 'EMPLOYEE', title: u.fullName, subtitle: u.title || u.email, link: '/app/employees' })),
+      ...smartUsers.map(u => ({ 
+        id: u.id, 
+        type: 'EMPLOYEE', 
+        title: u.fullName, 
+        subtitle: `${u.title || u.role?.name || 'Employee'} • Location: ${u.department?.name || 'HQ / Remote'}`, 
+        link: '/app/employees' 
+      })),
       ...transactions.map(t => ({ id: t.id, type: 'TRANSACTION', title: `Transaction: ${t.type}`, subtitle: `Status: ${t.status}`, link: '/app/transactions' })),
       ...expenses.map(e => ({ id: e.id, type: 'EXPENSE', title: e.description, subtitle: `Category: ${e.category}`, link: '/app/expenses' })),
       ...announcements.map(a => ({ id: a.id, type: 'ANNOUNCEMENT', title: a.title, subtitle: `By: ${a.authorId}`, link: '/app/announcements' })),
@@ -148,7 +187,9 @@ export class DashboardService {
       ...events.map(e => ({ id: e.id, type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT', title: e.title, subtitle: `Type: ${e.type}`, link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events' })),
       ...blogs.map(b => ({ id: b.id, type: 'BLOG POST', title: b.title, subtitle: `Status: ${b.status}`, link: '/app/outreach/cms' })),
       ...applications.map(a => ({ id: a.id, type: 'APPLICATION', title: a.applicantName, subtitle: `Track: ${a.type}`, link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications' })),
-      ...stats.map(s => ({ id: s.id, type: 'IMPACT STAT', title: s.label, subtitle: `Value: ${s.value}`, link: '/app/outreach/stats' }))
+      ...stats.map(s => ({ id: s.id, type: 'IMPACT STAT', title: s.label, subtitle: `Value: ${s.value}`, link: '/app/outreach/stats' })),
+      ...tasks.map(t => ({ id: t.id, type: 'TASK', title: t.title, subtitle: `Status: ${t.status}`, link: '/app/tasks' })),
+      ...smartKyc.map(k => ({ id: k.id, type: 'KYC SUBMISSION', title: k.applicantName, subtitle: `Email: ${k.email || 'N/A'} • Status: ${k.status}`, link: '/app/kyc' }))
     ];
   }
 

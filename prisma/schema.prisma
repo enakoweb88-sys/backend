@@ -342,6 +342,8 @@ model DailyReport {
   date      DateTime @default(now())
   content   String   @db.Text
   type      String   @default("DAILY")
+  status    String   @default("SUBMITTED") // 'DRAFT', 'SUBMITTED'
+  attachments Json?
   loginTime DateTime?
   logoutTime DateTime?
   pdfUrl    String?

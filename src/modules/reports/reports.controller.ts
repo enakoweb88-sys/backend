@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { RolesGuard } from '../../common/roles.guard';
@@ -28,7 +28,12 @@ export class ReportsController {
   }
 
   @Post('daily')
-  createDaily(@Body() body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, @CurrentUser() user: JwtUser) {
+  createDaily(@Body() body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, @CurrentUser() user: JwtUser) {
     return this.reportsService.createDaily(body, user);
+  }
+
+  @Post('daily/:id')
+  updateDaily(@Body() body: { content?: string; type?: string; status?: string; attachments?: any }, @CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.reportsService.updateDaily(id, body, user);
   }
 }

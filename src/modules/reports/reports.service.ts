@@ -71,7 +71,7 @@ export class ReportsService {
     });
   }
 
-  createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string }, user: JwtUser) {
+  createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, user: JwtUser) {
     return this.prisma.dailyReport.create({
       data: {
         content: body.content,
@@ -79,7 +79,21 @@ export class ReportsService {
         loginTime: body.loginTime ? new Date(body.loginTime) : null,
         logoutTime: body.logoutTime ? new Date(body.logoutTime) : null,
         pdfUrl: body.pdfUrl,
+        status: body.status || 'SUBMITTED',
+        attachments: body.attachments || null,
         userId: user.sub
+      }
+    });
+  }
+
+  updateDaily(id: string, body: { content?: string; type?: string; status?: string; attachments?: any }, user: JwtUser) {
+    return this.prisma.dailyReport.update({
+      where: { id, userId: user.sub },
+      data: {
+        ...(body.content && { content: body.content }),
+        ...(body.type && { type: body.type }),
+        ...(body.status && { status: body.status }),
+        ...(body.attachments && { attachments: body.attachments })
       }
     });
   }
