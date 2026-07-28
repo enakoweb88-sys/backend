@@ -292,6 +292,11 @@ export class CreateTaskDto {
   @IsOptional()
   assigneeId?: string;
 
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  assigneeIds?: string[];
+
   @IsDateString()
   @IsOptional()
   dueDate?: string;

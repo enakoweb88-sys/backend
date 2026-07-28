@@ -9,21 +9,22 @@ export class FilesService {
   async saveDocument(
     file: Express.Multer.File,
     user: JwtUser,
+    fileUrl: string,
+    fileName: string,
     category = 'general',
   ) {
-    const url = `/uploads/${file.filename}`;
     const doc = await this.prisma.document.create({
       data: {
-        fileName: file.filename,
+        fileName: fileName,
         originalName: file.originalname,
         mimeType: file.mimetype,
         sizeBytes: file.size,
-        url,
+        url: fileUrl,
         category,
         uploadedById: user.sub,
       },
     });
-    return { ...doc, url };
+    return { ...doc, url: fileUrl };
   }
 
   listDocuments(userId?: string, category?: string) {

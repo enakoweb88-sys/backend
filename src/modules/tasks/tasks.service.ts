@@ -38,22 +38,44 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, user: JwtUser) {
-    const assigneeId = dto.assigneeId || user.sub;
-    const task = await this.prisma.task.create({
-      data: {
-        title: dto.title,
-        description: dto.description,
-        priority: dto.priority ?? TaskPriority.NORMAL,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-        assigneeId,
-        creatorId: user.sub,
-      },
-      include: {
-        assignee: { select: { id: true, fullName: true, email: true } },
-        creator: { select: { id: true, fullName: true, email: true } },
-      },
-    });
-    return task;
+    const assigneeIds = dto.assigneeIds && dto.assigneeIds.length > 0 
+      ? dto.assigneeIds 
+      : [dto.assigneeId || user.sub];
+
+    const tasks = [];
+    for (const assigneeId of assigneeIds) {
+      const task = await this.prisma.task.create({
+        data: {
+          title: dto.title,
+          description: dto.description,
+          priority: dto.priority ?? TaskPriority.NORMAL,
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+          assigneeId,
+          creatorId: user.sub,
+        },
+        include: {
+          assignee: { select: { id: true, fullName: true, email: true } },
+          creator: { select: { id: true, fullName: true, email: true } },
+        },
+      });
+      tasks.push(task);
+
+      // Create notification for the assignee
+      if (assigneeId !== user.sub) {
+        await this.prisma.notification.create({
+          data: {
+            userId: assigneeId,
+            title: 'New Task Assigned',
+            body: `You have been assigned a new task: ${task.title}`,
+            type: 'INFO',
+            link: '/tasks',
+          }
+        });
+      }
+    }
+
+    // Return first task to maintain backward compatibility with any single-task return callers
+    return tasks[0];
   }
 
   async update(id: string, dto: UpdateTaskDto, user: JwtUser) {

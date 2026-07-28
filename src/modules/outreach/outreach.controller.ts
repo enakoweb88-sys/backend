@@ -98,8 +98,8 @@ export class OutreachController {
   }
 
   @Get('analytics/insights')
-  async getWebInsights() {
-    return this.outreachService.getWebInsights();
+  async getWebInsights(@Query('site') site?: string) {
+    return this.outreachService.getWebInsights(site);
   }
 
   // --- Community Projects ---

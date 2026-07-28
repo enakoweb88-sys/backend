@@ -9,7 +9,901 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
+model Role {
+  id          String   @id @default(cuid())
+  name        RoleName @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+
+  @@map("roles")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  goals     Goal[]
+  users     User[]
+  leaders   User[]   @relation("DepartmentLeaders")
+
+  @@map("departments")
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  passwordHash         String
+  fullName             String
+  phone                String?
+  title                String?
+  status               UserStatus            @default(ACTIVE)
+  roleId               String
+  departmentId         String?
+  lastLoginAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  avatarUrl            String?
+  address              String?
+  dateOfBirth          DateTime?
+  emergencyContact     String?
+  employmentType       String?
+  hireDate             DateTime?
+  personalEmail        String?
+  salary               Decimal?              @db.Decimal(14, 2)
+  activityLogs         ActivityLog[]
+  announcementComments AnnouncementComment[]
+  announcementLikes    AnnouncementLike[]
+  announcements        Announcement[]
+  auditLogs            AuditLog[]
+  channelMembers       ChannelMember[]
+  commissions          Commission[]
+  dailyReports         DailyReport[]
+  documents            Document[]
+  expenses             Expense[]
+  goals                Goal[]                @relation("PersonalGoals")
+  approvedKyc          KycSubmission[]       @relation("ApprovedKyc")
+  reviewedKyc          KycSubmission[]       @relation("ReviewedKyc")
+  mealRecords          MealRecord[]
+  sentMessages         Message[]             @relation("SentMessages")
+  notifications        Notification[]
+  performanceMetrics   PerformanceMetric[]
+  refreshTokens        RefreshToken[]
+  generatedReports     ReportFile[]          @relation("GeneratedReports")
+  addedSubscriptions   Subscription[]        @relation("AddedSubscriptions")
+  taskComments         TaskComment[]
+  assignedTasks        Task[]                @relation("AssignedTasks")
+  createdTasks         Task[]                @relation("CreatedTasks")
+  preference           UserPreference?
+  userSessions         UserSession[]
+  department           Department?           @relation(fields: [departmentId], references: [id])
+  role                 Role                  @relation(fields: [roleId], references: [id])
+  ledDepartments       Department[]          @relation("DepartmentLeaders")
+
+  @@index([departmentId])
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+model UserPreference {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  analytics      Boolean  @default(true)
+  mfa            Boolean  @default(false)
+  aiWorkspace    Boolean  @default(false)
+  emailNotif     Boolean  @default(true)
+  pushNotif      Boolean  @default(true)
+  smsNotif       Boolean  @default(false)
+  slackConnected Boolean  @default(false)
+  awsConnected   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String
+  loginAt   DateTime  @default(now())
+  logoutAt  DateTime?
+  duration  Int?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  device    String?
+  ipAddress String?
+  location  String?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Task {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus    @default(TODO)
+  dueDate     DateTime?
+  assigneeId  String?
+  creatorId   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  priority    TaskPriority  @default(NORMAL)
+  comments    TaskComment[]
+  assignee    User?         @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creator     User          @relation("CreatedTasks", fields: [creatorId], references: [id])
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([creatorId])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([authorId])
+  @@map("task_comments")
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  description   String
+  amount        Decimal       @db.Decimal(14, 2)
+  currency      String        @default("XAF")
+  category      String
+  status        ExpenseStatus @default(PENDING)
+  receiptUrl    String?
+  submittedById String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  reviewedAt    DateTime?
+  reviewedById  String?
+  submittedBy   User          @relation(fields: [submittedById], references: [id])
+
+  @@index([status])
+  @@index([submittedById])
+  @@map("expenses")
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  reference   String            @unique
+  entity      String
+  amount      Decimal           @db.Decimal(14, 2)
+  currency    String            @default("XAF")
+  type        String
+  status      TransactionStatus @default(PENDING)
+  proofUrl    String?
+  settledAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  description String?
+  channel     String?
+  charges     Decimal?          @default(0) @db.Decimal(14, 2)
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model MealRecord {
+  id             String     @id @default(cuid())
+  employeeId     String
+  date           DateTime
+  status         MealStatus
+  totalAmount    Decimal    @default(1000) @db.Decimal(14, 2)
+  companyAmount  Decimal    @default(500) @db.Decimal(14, 2)
+  employeeAmount Decimal    @default(500) @db.Decimal(14, 2)
+  disputeReason  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  mealName       String?
+  mealTime       String?
+  employee       User       @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([status])
+  @@map("meal_records")
+}
+
+model DailyReport {
+  id          String    @id @default(cuid())
+  userId      String
+  date        DateTime  @default(now())
+  content     String
+  loginTime   DateTime?
+  logoutTime  DateTime?
+  pdfUrl      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  type        String    @default("DAILY")
+  attachments Json?
+  status      String    @default("SUBMITTED")
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("daily_reports")
+}
+
+model KycSubmission {
+  id              String        @id @default(cuid())
+  applicantType   String
+  applicantName   String
+  email           String?
+  phone           String?
+  payload         Json
+  status          KycStatus     @default(PENDING)
+  rejectionReason String?
+  reviewedById    String?
+  approvedById    String?
+  reviewedAt      DateTime?
+  approvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  documents       KycDocument[]
+  approvedBy      User?         @relation("ApprovedKyc", fields: [approvedById], references: [id])
+  reviewedBy      User?         @relation("ReviewedKyc", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([approvedById])
+  @@index([reviewedById])
+  @@map("kyc_submissions")
+}
+
+model KycDocument {
+  id           String        @id @default(cuid())
+  submissionId String
+  documentType String
+  fileName     String
+  fileUrl      String
+  mimeType     String?
+  createdAt    DateTime      @default(now())
+  submission   KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("kyc_documents")
+}
+
+model Goal {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  targetValue  Decimal?    @db.Decimal(14, 2)
+  currentValue Decimal?    @default(0) @db.Decimal(14, 2)
+  unit         String?
+  departmentId String?
+  dueDate      DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  ownerId      String?
+  scope        GoalScope   @default(COMPANY)
+  status       GoalStatus  @default(ACTIVE)
+  department   Department? @relation(fields: [departmentId], references: [id])
+  owner        User?       @relation("PersonalGoals", fields: [ownerId], references: [id])
+
+  @@index([scope, status])
+  @@index([departmentId])
+  @@index([ownerId])
+  @@map("goals")
+}
+
+model Channel {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  description String?
+  isGeneral   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  members     ChannelMember[]
+
+  @@map("channels")
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  createdAt DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+model Announcement {
+  id        String                @id @default(cuid())
+  title     String
+  content   String
+  tag       String?
+  authorId  String
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  pinned    Boolean               @default(false)
+  comments  AnnouncementComment[]
+  likes     AnnouncementLike[]
+  author    User                  @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+  @@index([pinned, createdAt])
+  @@map("announcements")
+}
+
+model AnnouncementLike {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@index([userId])
+  @@map("announcement_likes")
+}
+
+model AnnouncementComment {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  content        String
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
+  @@index([userId])
+  @@map("announcement_comments")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      NotificationType @default(INFO)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  link      String?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  channel   String
+  content   String
+  senderId  String
+  createdAt DateTime @default(now())
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+
+  @@index([channel, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+model PerformanceMetric {
+  id        String   @id @default(cuid())
+  userId    String
+  metric    String
+  value     Decimal  @db.Decimal(14, 2)
+  period    String
+  createdAt DateTime @default(now())
+  notes     String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, period])
+  @@map("performance_metrics")
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  url          String
+  category     String   @default("general")
+  uploadedById String
+  createdAt    DateTime @default(now())
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([uploadedById])
+  @@map("documents")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  ipAddress String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  module    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([module])
+  @@map("activity_logs")
+}
+
+model BankAccount {
+  id        String   @id @default(cuid())
+  name      String
+  bank      String
+  accountNo String
+  balance   Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bank_accounts")
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  category  String
+  budget    Decimal  @db.Decimal(14, 2)
+  actual    Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  client    String
+  amount    Decimal  @db.Decimal(14, 2)
+  status    String
+  dueDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invoices")
+}
+
+model AppActivity {
+  id        String   @id @default(cuid())
+  date      DateTime
+  downloads Int
+  active    Int
+  createdAt DateTime @default(now())
+
+  @@map("app_activities")
+}
+
+model MarketingChannel {
+  id        String   @id @default(cuid())
+  name      String
+  users     Int
+  total     Int
+  growth    Decimal  @db.Decimal(5, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("marketing_channels")
+}
+
+model NjangiGroup {
+  id            String               @id @default(cuid())
+  name          String
+  amount        Decimal              @db.Decimal(14, 2)
+  active        Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  contributions NjangiContribution[]
+
+  @@map("njangi_groups")
+}
+
+model NjangiContribution {
+  id        String      @id @default(cuid())
+  groupId   String
+  amount    Decimal     @db.Decimal(14, 2)
+  createdAt DateTime    @default(now())
+  group     NjangiGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("njangi_contributions")
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  source    String
+  interest  String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("leads")
+}
+
+model Meeting {
+  id        String   @id @default(cuid())
+  time      String
+  person    String
+  type      String
+  status    String
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("meetings")
+}
+
+model Commission {
+  id        String   @id @default(cuid())
+  userId    String
+  total     Decimal  @db.Decimal(14, 2)
+  paid      Decimal  @db.Decimal(14, 2)
+  pending   Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("commissions")
+}
+
+model ContentPost {
+  id         String   @id @default(cuid())
+  title      String
+  platform   String
+  type       String
+  status     String
+  author     String
+  date       DateTime @default(now())
+  reach      Int      @default(0)
+  engagement Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("content_posts")
+}
+
+model AdCampaign {
+  id          String   @id @default(cuid())
+  date        DateTime
+  spend       Decimal  @db.Decimal(14, 2)
+  conversions Int
+  createdAt   DateTime @default(now())
+
+  @@map("ad_campaigns")
+}
+
+model SocialMetric {
+  id          String   @id @default(cuid())
+  platform    String
+  followers   Int
+  engagement  String
+  impressions Int
+  growth      Decimal  @db.Decimal(5, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("social_metrics")
+}
+
+model SupportTicket {
+  id          String               @id @default(cuid())
+  customer    String               @default("Unknown")
+  subject     String
+  status      String               @default("New")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  clientEmail String               @default("")
+  description String               @default("")
+  replies     SupportTicketReply[]
+
+  @@map("support_tickets")
+}
+
+model SupportTicketReply {
+  id        String        @id @default(cuid())
+  ticketId  String
+  message   String
+  isAdmin   Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("support_ticket_replies")
+}
+
+model LeaveRequest {
+  id        String   @id @default(cuid())
+  employee  String
+  type      String
+  duration  String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("leave_requests")
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  name        String
+  cost        Decimal  @db.Decimal(14, 2)
+  cycle       String
+  status      String   @default("Active")
+  nextBilling DateTime
+  receiptUrl  String?
+  addedById   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  startDate   DateTime @default(now())
+  addedBy     User     @relation("AddedSubscriptions", fields: [addedById], references: [id])
+
+  @@index([addedById])
+  @@map("subscriptions")
+}
+
+model ReportFile {
+  id          String   @id @default(cuid())
+  title       String
+  type        String
+  size        String
+  data        String?
+  generatedBy String
+  createdAt   DateTime @default(now())
+  generator   User     @relation("GeneratedReports", fields: [generatedBy], references: [id])
+
+  @@index([generatedBy])
+  @@map("report_files")
+}
+
+model OutreachEvent {
+  id                 String                @id @default(cuid())
+  title              String
+  description        String?
+  status             OutreachEventStatus   @default(DRAFT)
+  openDate           DateTime?
+  closeDate          DateTime?
+  targetAmount       Decimal?              @db.Decimal(14, 2)
+  raisedAmount       Decimal?              @db.Decimal(14, 2)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  descriptionFr      String?
+  targetSchools      String[]
+  titleFr            String?
+  gallery            Json?
+  storyDescription   String?
+  storyDescriptionFr String?
+  storyMediaType     String?
+  storyMediaUrl      String?
+  storyTitle         String?
+  storyTitleFr       String?
+  videoUrl           String?
+  type               String
+  customFields       Json?
+  applications       OutreachApplication[]
+
+  @@map("outreach_events")
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  images      String[]  @default([])
+  author      String
+  category    String    @default("Blog")
+  coverImage  String?
+  slug        String    @unique
+  status      String    @default("DRAFT")
+  video       String?
+
+  @@map("blog_posts")
+}
+
+model OutreachApplication {
+  id            String                  @id @default(cuid())
+  applicantName String
+  email         String
+  phone         String?
+  type          OutreachApplicationType @default(SCHOLARSHIP)
+  level         ApplicationLevel        @default(NONE)
+  status        ApplicationStatus       @default(PENDING)
+  details       Json?
+  documents     String[]
+  eventId       String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  event         OutreachEvent?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("outreach_applications")
+}
+
+model NewsletterSubscriber {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  subscribedAt DateTime @default(now())
+
+  @@map("newsletter_subscribers")
+}
+
+model PublicImpactStat {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String
+  section   String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("public_impact_stats")
+}
+
+model PublicMilestone {
+  id          String   @id @default(cuid())
+  year        String
+  title       String
+  description String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("public_milestones")
+}
+
+model PublicImpactChart {
+  id         String   @id @default(cuid())
+  label      String
+  percentage Int
+  color      String   @default("bg-[#00BFA5]")
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("public_impact_charts")
+}
+
+model Donation {
+  id        String            @id @default(cuid())
+  amount    Float
+  sector    String
+  frequency DonationFrequency
+  method    PaymentMethod
+  fullName  String
+  email     String
+  phone     String
+  status    TransactionStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  documents String[]
+  currency  String            @default("XAF")
+}
+
+model FloatAccount {
+  id        String   @id @default(cuid())
+  channel   String   @unique
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  totalIn   Decimal  @default(0) @db.Decimal(14, 2)
+  totalOut  Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("float_accounts")
+}
+
+model Investment {
+  id        String   @id @default(cuid())
+  title     String
+  category  String
+  amount    Decimal  @default(0) @db.Decimal(14, 2)
+  weight    Decimal  @default(0) @db.Decimal(5, 2)
+  color     String   @default("bg-primary")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("investments")
+}
+
+model CookieConsentRecord {
+  id         String   @id @default(cuid())
+  consent    String
+  ipHash     String?
+  userAgent  String?
+  country    String?  @default("Cameroon")
+  deviceType String?  @default("desktop")
+  createdAt  DateTime @default(now())
+
+  @@map("cookie_consent_records")
+}
+
+model WebAnalyticsEvent {
+  id          String   @id @default(cuid())
+  eventType   String
+  path        String
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  clickX      Float?
+  clickY      Float?
+  scrollDepth Int?
+  duration    Int?
+  deviceType  String?  @default("desktop")
+  country     String?  @default("Cameroon")
+  createdAt   DateTime @default(now())
+
+  @@map("web_analytics_events")
+}
+
+model CommunityProject {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  communitySlug String
+  targetAmount  Decimal  @default(0) @db.Decimal(14, 2)
+  currentAmount Decimal  @default(0) @db.Decimal(14, 2)
+  status        String   @default("In Progress")
+  coverImage    String?
+  videoUrl      String?
+  images        String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([communitySlug])
+  @@map("community_projects")
+}
 
 enum RoleName {
   CEO
@@ -101,732 +995,6 @@ enum PaymentMethod {
   BANK
 }
 
-// ─── Core Models ─────────────────────────────────────────────────────────────
-
-model Role {
-  id          String   @id @default(cuid())
-  name        RoleName @unique
-  description String?
-  users       User[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("roles")
-}
-
-model Department {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  users     User[]
-  goals     Goal[]
-  leaders   User[]   @relation("DepartmentLeaders")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("departments")
-}
-
-model User {
-  id                 String              @id @default(cuid())
-  email              String              @unique
-  passwordHash       String
-  fullName           String
-  phone              String?
-  title              String?
-  avatarUrl          String?
-  status             UserStatus          @default(ACTIVE)
-  roleId             String
-  departmentId       String?
-  lastLoginAt        DateTime?
-  role               Role                @relation(fields: [roleId], references: [id])
-  department         Department?         @relation(fields: [departmentId], references: [id])
-  preference         UserPreference?
-  assignedTasks      Task[]              @relation("AssignedTasks")
-  createdTasks       Task[]              @relation("CreatedTasks")
-  taskComments       TaskComment[]
-  expenses           Expense[]
-  mealRecords        MealRecord[]
-  sentMessages       Message[]           @relation("SentMessages")
-  notifications      Notification[]
-  announcements      Announcement[]
-  announcementLikes    AnnouncementLike[]
-  announcementComments AnnouncementComment[]
-  performanceMetrics PerformanceMetric[]
-  reviewedKyc        KycSubmission[]     @relation("ReviewedKyc")
-  approvedKyc        KycSubmission[]     @relation("ApprovedKyc")
-  refreshTokens      RefreshToken[]
-  auditLogs          AuditLog[]
-  activityLogs       ActivityLog[]
-  documents          Document[]
-  goals              Goal[]              @relation("PersonalGoals")
-  commissions        Commission[]
-  channelMembers     ChannelMember[]
-  addedSubscriptions Subscription[]      @relation("AddedSubscriptions")
-  generatedReports   ReportFile[]        @relation("GeneratedReports")
-  dailyReports       DailyReport[]
-  userSessions       UserSession[]
-  
-  // Additional HR Fields
-  dateOfBirth        DateTime?
-  address            String?
-  personalEmail      String?
-  employmentType     String?
-  salary             Decimal?            @db.Decimal(14, 2)
-  emergencyContact   String?
-  hireDate           DateTime?
-  ledDepartments     Department[]        @relation("DepartmentLeaders")
-
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-
-  @@index([departmentId])
-  @@index([roleId])
-  @@index([status])
-  @@map("users")
-}
-
-model UserPreference {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  analytics       Boolean  @default(true)
-  mfa             Boolean  @default(false)
-  aiWorkspace     Boolean  @default(false)
-  emailNotif      Boolean  @default(true)
-  pushNotif       Boolean  @default(true)
-  smsNotif        Boolean  @default(false)
-  slackConnected  Boolean  @default(false)
-  awsConnected    Boolean  @default(false)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@map("user_preferences")
-}
-
-model UserSession {
-  id        String    @id @default(cuid())
-  userId    String
-  loginAt   DateTime  @default(now())
-  logoutAt  DateTime?
-  duration  Int?      // duration in seconds
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-
-  @@index([userId])
-  @@map("user_sessions")
-}
-
-model RefreshToken {
-  id        String    @id @default(cuid())
-  tokenHash String
-  userId    String
-  device    String?
-  ipAddress String?
-  location  String?
-  expiresAt DateTime
-  revokedAt DateTime?
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-
-  @@index([userId])
-  @@map("refresh_tokens")
-}
-
-// ─── Task Management ─────────────────────────────────────────────────────────
-
-model Task {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  status      TaskStatus   @default(TODO)
-  priority    TaskPriority @default(NORMAL)
-  dueDate     DateTime?
-  assigneeId  String?
-  creatorId   String
-  assignee    User?        @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  creator     User         @relation("CreatedTasks", fields: [creatorId], references: [id])
-  comments    TaskComment[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  @@index([status])
-  @@index([assigneeId])
-  @@index([creatorId])
-  @@map("tasks")
-}
-
-model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  authorId  String
-  content   String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([taskId])
-  @@index([authorId])
-  @@map("task_comments")
-}
-
-// ─── Financial Models ─────────────────────────────────────────────────────────
-
-model Expense {
-  id            String        @id @default(cuid())
-  description   String
-  amount        Decimal       @db.Decimal(14, 2)
-  currency      String        @default("XAF")
-  category      String
-  status        ExpenseStatus @default(PENDING)
-  receiptUrl    String?
-  reviewedById  String?
-  reviewedAt    DateTime?
-  submittedById String
-  submittedBy   User          @relation(fields: [submittedById], references: [id])
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  @@index([status])
-  @@index([submittedById])
-  @@map("expenses")
-}
-
-model Transaction {
-  id          String            @id @default(cuid())
-  reference   String            @unique
-  entity      String
-  amount      Decimal           @db.Decimal(14, 2)
-  currency    String            @default("XAF")
-  type        String
-  channel     String?
-  charges     Decimal?          @default(0) @db.Decimal(14, 2)
-  status      TransactionStatus @default(PENDING)
-  description String?
-  proofUrl    String?
-  settledAt   DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@index([status])
-  @@index([createdAt])
-  @@map("transactions")
-}
-
-// ─── Meal Tracking ───────────────────────────────────────────────────────────
-
-model MealRecord {
-  id             String     @id @default(cuid())
-  employeeId     String
-  date           DateTime
-  status         MealStatus
-  mealName       String?
-  mealTime       String?
-  totalAmount    Decimal    @default(1000) @db.Decimal(14, 2)
-  companyAmount  Decimal    @default(500) @db.Decimal(14, 2)
-  employeeAmount Decimal    @default(500) @db.Decimal(14, 2)
-  disputeReason  String?
-  employee       User       @relation(fields: [employeeId], references: [id])
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-
-  @@unique([employeeId, date])
-  @@index([employeeId])
-  @@index([status])
-  @@map("meal_records")
-}
-
-model DailyReport {
-  id        String   @id @default(cuid())
-  userId    String
-  date      DateTime @default(now())
-  content   String   @db.Text
-  type      String   @default("DAILY")
-  status    String   @default("SUBMITTED") // 'DRAFT', 'SUBMITTED'
-  attachments Json?
-  loginTime DateTime?
-  logoutTime DateTime?
-  pdfUrl    String?
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@map("daily_reports")
-}
-
-// ─── KYC ─────────────────────────────────────────────────────────────────────
-
-model KycSubmission {
-  id              String        @id @default(cuid())
-  applicantType   String
-  applicantName   String
-  email           String?
-  phone           String?
-  payload         Json
-  status          KycStatus     @default(PENDING)
-  rejectionReason String?
-  reviewedById    String?
-  approvedById    String?
-  reviewedAt      DateTime?
-  approvedAt      DateTime?
-  reviewedBy      User?         @relation("ReviewedKyc", fields: [reviewedById], references: [id])
-  approvedBy      User?         @relation("ApprovedKyc", fields: [approvedById], references: [id])
-  documents       KycDocument[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@index([status])
-  @@index([approvedById])
-  @@index([reviewedById])
-  @@map("kyc_submissions")
-}
-
-model KycDocument {
-  id           String        @id @default(cuid())
-  submissionId String
-  documentType String
-  fileName     String
-  fileUrl      String
-  mimeType     String?
-  submission   KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  createdAt    DateTime      @default(now())
-
-  @@index([submissionId])
-  @@map("kyc_documents")
-}
-
-// ─── Goals ───────────────────────────────────────────────────────────────────
-
-model Goal {
-  id           String     @id @default(cuid())
-  title        String
-  description  String?
-  targetValue  Decimal?   @db.Decimal(14, 2)
-  currentValue Decimal?   @default(0) @db.Decimal(14, 2)
-  unit         String?
-  scope        GoalScope  @default(COMPANY)
-  status       GoalStatus @default(ACTIVE)
-  departmentId String?
-  ownerId      String?
-  dueDate      DateTime?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  owner        User?       @relation("PersonalGoals", fields: [ownerId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  @@index([scope, status])
-  @@index([departmentId])
-  @@index([ownerId])
-  @@map("goals")
-}
-
-// ─── Communications ───────────────────────────────────────────────────────────
-
-model Channel {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  isGeneral   Boolean  @default(false)
-  members     ChannelMember[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("channels")
-}
-
-model ChannelMember {
-  id        String   @id @default(cuid())
-  channelId String
-  userId    String
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@unique([channelId, userId])
-  @@index([channelId])
-  @@index([userId])
-  @@map("channel_members")
-}
-
-model Announcement {
-  id        String                @id @default(cuid())
-  title     String
-  content   String
-  tag       String?
-  pinned    Boolean               @default(false)
-  authorId  String
-  author    User                  @relation(fields: [authorId], references: [id])
-  likes     AnnouncementLike[]
-  comments  AnnouncementComment[]
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-
-  @@index([authorId])
-  @@index([pinned, createdAt])
-  @@map("announcements")
-}
-
-model AnnouncementLike {
-  id             String       @id @default(cuid())
-  announcementId String
-  userId         String
-  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-
-  @@unique([announcementId, userId])
-  @@index([announcementId])
-  @@index([userId])
-  @@map("announcement_likes")
-}
-
-model AnnouncementComment {
-  id             String       @id @default(cuid())
-  announcementId String
-  userId         String
-  content        String       @db.Text
-  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-
-  @@index([announcementId])
-  @@index([userId])
-  @@map("announcement_comments")
-}
-
-model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  title     String
-  body      String
-  type      NotificationType @default(INFO)
-  readAt    DateTime?
-  link      String?
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime         @default(now())
-
-  @@index([userId, readAt])
-  @@map("notifications")
-}
-
-model Message {
-  id        String   @id @default(cuid())
-  channel   String
-  content   String
-  senderId  String
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
-  createdAt DateTime @default(now())
-
-  @@index([channel, createdAt])
-  @@index([senderId])
-  @@map("messages")
-}
-
-// ─── Performance & Analytics ─────────────────────────────────────────────────
-
-model PerformanceMetric {
-  id        String   @id @default(cuid())
-  userId    String
-  metric    String
-  value     Decimal  @db.Decimal(14, 2)
-  period    String
-  notes     String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([userId, period])
-  @@map("performance_metrics")
-}
-
-// ─── Documents ───────────────────────────────────────────────────────────────
-
-model Document {
-  id           String   @id @default(cuid())
-  fileName     String
-  originalName String
-  mimeType     String
-  sizeBytes    Int
-  url          String
-  category     String   @default("general")
-  uploadedById String
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime @default(now())
-
-  @@index([uploadedById])
-  @@map("documents")
-}
-
-// ─── Audit & Activity Logs ───────────────────────────────────────────────────
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  action    String
-  entity    String
-  entityId  String?
-  metadata  Json?
-  ipAddress String?
-  actor     User?    @relation(fields: [actorId], references: [id])
-  createdAt DateTime @default(now())
-
-  @@index([actorId, createdAt])
-  @@index([entity, entityId])
-  @@map("audit_logs")
-}
-
-model ActivityLog {
-  id        String   @id @default(cuid())
-  userId    String
-  action    String
-  module    String
-  details   String?
-  ipAddress String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-  @@index([module])
-  @@map("activity_logs")
-}
-
-// ─── Finance Additions ────────────────────────────────────────────────────────
-model BankAccount {
-  id        String   @id @default(cuid())
-  name      String
-  bank      String
-  accountNo String
-  balance   Decimal  @db.Decimal(14, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("bank_accounts")
-}
-
-model Budget {
-  id        String   @id @default(cuid())
-  category  String
-  budget    Decimal  @db.Decimal(14, 2)
-  actual    Decimal  @db.Decimal(14, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("budgets")
-}
-
-model Invoice {
-  id        String   @id @default(cuid())
-  client    String
-  amount    Decimal  @db.Decimal(14, 2)
-  status    String   // 'Paid', 'Pending', 'Overdue'
-  dueDate   DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("invoices")
-}
-
-// ─── Analytics & Njangi Additions ───────────────────────────────────────────
-model AppActivity {
-  id        String   @id @default(cuid())
-  date      DateTime
-  downloads Int
-  active    Int
-  createdAt DateTime @default(now())
-
-  @@map("app_activities")
-}
-
-model MarketingChannel {
-  id        String   @id @default(cuid())
-  name      String
-  users     Int
-  total     Int
-  growth    Decimal  @db.Decimal(5, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("marketing_channels")
-}
-
-model NjangiGroup {
-  id        String   @id @default(cuid())
-  name      String
-  amount    Decimal  @db.Decimal(14, 2)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  contributions NjangiContribution[]
-
-  @@map("njangi_groups")
-}
-
-model NjangiContribution {
-  id        String   @id @default(cuid())
-  groupId   String
-  amount    Decimal  @db.Decimal(14, 2)
-  createdAt DateTime @default(now())
-  group     NjangiGroup @relation(fields: [groupId], references: [id])
-
-  @@index([groupId])
-  @@map("njangi_contributions")
-}
-
-// ─── BD Additions ─────────────────────────────────────────────────────────────
-model Lead {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  source    String
-  interest  String
-  status    String   // 'New', 'Contacted', 'Interested', 'KYC Sent', 'Active Client'
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("leads")
-}
-
-model Meeting {
-  id        String   @id @default(cuid())
-  time      String   // Using string for mock simplicity (e.g., '10:00 AM')
-  person    String
-  type      String
-  status    String   // 'Confirmed', 'Pending'
-  date      DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("meetings")
-}
-
-model Commission {
-  id        String   @id @default(cuid())
-  userId    String
-  total     Decimal  @db.Decimal(14, 2)
-  paid      Decimal  @db.Decimal(14, 2)
-  pending   Decimal  @db.Decimal(14, 2)
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@map("commissions")
-}
-
-// ─── Digital Additions ────────────────────────────────────────────────────────
-model ContentPost {
-  id        String   @id @default(cuid())
-  title     String
-  platform  String
-  type      String   // 'Posts', 'Reels', 'Videos'
-  status    String   // 'Pending', 'Approved', 'To Do', 'In Progress', 'Published'
-  author    String
-  date      DateTime @default(now())
-  reach     Int      @default(0)
-  engagement Int     @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("content_posts")
-}
-
-model AdCampaign {
-  id          String   @id @default(cuid())
-  date        DateTime
-  spend       Decimal  @db.Decimal(14, 2)
-  conversions Int
-  createdAt   DateTime @default(now())
-
-  @@map("ad_campaigns")
-}
-
-model SocialMetric {
-  id          String   @id @default(cuid())
-  platform    String
-  followers   Int
-  engagement  String   // e.g., '4.2%'
-  impressions Int
-  growth      Decimal  @db.Decimal(5, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("social_metrics")
-}
-
-// ─── Support & HR Additions ───────────────────────────────────────────────────
-model SupportTicket {
-  id          String               @id @default(cuid())
-  customer    String               @default("Unknown")
-  clientEmail String               @default("")
-  subject     String
-  description String               @default("")
-  status      String               @default("New") // 'New', 'In Progress', 'Resolved', 'Escalated'
-  replies     SupportTicketReply[]
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-
-  @@map("support_tickets")
-}
-
-model SupportTicketReply {
-  id        String        @id @default(cuid())
-  ticketId  String
-  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
-  message   String
-  isAdmin   Boolean       @default(false)
-  createdAt DateTime      @default(now())
-
-  @@index([ticketId])
-  @@map("support_ticket_replies")
-}
-
-model LeaveRequest {
-  id        String   @id @default(cuid())
-  employee  String
-  type      String
-  duration  String   // e.g., '3 days'
-  status    String   // 'Pending', 'Approved', 'Rejected'
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("leave_requests")
-}
-
-// ─── Subscriptions & Reports ──────────────────────────────────────────────────
-model Subscription {
-  id          String   @id @default(cuid())
-  name        String
-  cost        Decimal  @db.Decimal(14, 2)
-  cycle       String   // 'Monthly' | 'Yearly'
-  status      String   @default("Active") // 'Active' | 'Cancelled'
-  startDate   DateTime @default(now())
-  nextBilling DateTime
-  receiptUrl  String?
-  addedById   String
-  addedBy     User     @relation("AddedSubscriptions", fields: [addedById], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([addedById])
-  @@map("subscriptions")
-}
-
-model ReportFile {
-  id          String   @id @default(cuid())
-  title       String
-  type        String   // 'PDF' | 'CSV' | 'XLSX'
-  size        String   
-  data        String?  // Base64 or string content
-  generatedBy String
-  generator   User     @relation("GeneratedReports", fields: [generatedBy], references: [id])
-  createdAt   DateTime @default(now())
-
-  @@index([generatedBy])
-  @@map("report_files")
-}
-
-// ─── Outreach Models ─────────────────────────────────────────────────────────
-
 enum OutreachEventType {
   SCHOLARSHIP
   FUNDRAISER
@@ -858,214 +1026,4 @@ enum OutreachApplicationType {
   FAMILY_IN_NEED
   SCHOOL_REGISTRATION
   GENERAL
-}
-
-model OutreachEvent {
-  id           String              @id @default(cuid())
-  title        String
-  titleFr      String?
-  description  String?
-  descriptionFr String?
-  type         String
-  status       OutreachEventStatus @default(DRAFT)
-  openDate     DateTime?
-  closeDate    DateTime?
-  targetAmount Decimal?            @db.Decimal(14, 2)
-  raisedAmount Decimal?            @db.Decimal(14, 2)
-  targetSchools String[]
-  videoUrl            String?
-  gallery             Json?      // [{ url: string, caption: string, captionFr: string }]
-  storyTitle          String?
-  storyTitleFr        String?
-  storyDescription    String?
-  storyDescriptionFr  String?
-  storyMediaUrl       String?
-  storyMediaType      String?    // 'IMAGE' or 'VIDEO'
-  customFields        Json?      // e.g., [{ name: "waec_cert", label: "WAEC Certificate", type: "file", required: true }]
-
-  applications OutreachApplication[]
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-
-  @@map("outreach_events")
-}
-
-model BlogPost {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  content     String   @db.Text
-  coverImage  String?
-  images      String[] @default([])
-  video       String?
-  category    String   @default("Blog")
-  author      String
-  status      String   @default("DRAFT") // 'DRAFT', 'PUBLISHED'
-  publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("blog_posts")
-}
-
-model OutreachApplication {
-  id             String                  @id @default(cuid())
-  applicantName  String
-  email          String
-  phone          String?
-  type           OutreachApplicationType @default(SCHOLARSHIP)
-  level          ApplicationLevel        @default(NONE)
-  status         ApplicationStatus       @default(PENDING)
-  details        Json?             
-  documents      String[]
-  eventId        String?
-  event          OutreachEvent?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
-
-  @@index([eventId])
-  @@map("outreach_applications")
-}
-
-model NewsletterSubscriber {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  subscribedAt DateTime @default(now())
-
-  @@map("newsletter_subscribers")
-}
-
-// ─── Public Impact Data (Website) ──────────────────────────────────────────────
-
-model PublicImpactStat {
-  id          String   @id @default(cuid())
-  key         String   @unique // e.g., 'lives_targeted', 'partner_schools'
-  value       String   // e.g., '120+', '5'
-  label       String   // e.g., 'Lives Targeted', 'Partner Schools'
-  section     String   // e.g., 'hero', 'dashboard', 'kpi'
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("public_impact_stats")
-}
-
-model PublicMilestone {
-  id          String   @id @default(cuid())
-  year        String   // e.g., 'Phase 1'
-  title       String
-  description String
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("public_milestones")
-}
-
-model PublicImpactChart {
-  id          String   @id @default(cuid())
-  label       String   // e.g., 'Scholarships'
-  percentage  Int      // e.g., 40
-  color       String   @default("bg-[#00BFA5]")
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("public_impact_charts")
-}
-
-model Donation {
-  id        String            @id @default(cuid())
-  amount    Float
-  sector    String
-  frequency DonationFrequency
-  method    PaymentMethod
-  fullName  String
-  email     String
-  phone     String
-  status    TransactionStatus @default(PENDING)
-  currency  String            @default("XAF")
-  documents String[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-}
-
-// ─── Float Accounts ───────────────────────────────────────────────────────────
-
-model FloatAccount {
-  id        String   @id @default(cuid())
-  channel   String   @unique
-  balance   Decimal  @default(0) @db.Decimal(14, 2)
-  totalIn   Decimal  @default(0) @db.Decimal(14, 2)
-  totalOut  Decimal  @default(0) @db.Decimal(14, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("float_accounts")
-}
-
-// ─── Investments ─────────────────────────────────────────────────────────────
-
-model Investment {
-  id        String   @id @default(cuid())
-  title     String
-  category  String
-  amount    Decimal  @default(0) @db.Decimal(14, 2)
-  weight    Decimal  @default(0) @db.Decimal(5, 2)
-  color     String   @default("bg-primary")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("investments")
-}
-
-// ─── Cookie & Web Analytics ──────────────────────────────────────────────────
-
-model CookieConsentRecord {
-  id          String   @id @default(cuid())
-  consent     String   // "accepted" | "essential_only"
-  ipHash      String?
-  userAgent   String?
-  country     String?  @default("Cameroon")
-  deviceType  String?  @default("desktop")
-  createdAt   DateTime @default(now())
-
-  @@map("cookie_consent_records")
-}
-
-model WebAnalyticsEvent {
-  id          String   @id @default(cuid())
-  eventType   String   // "pageview" | "click" | "scroll" | "campaign"
-  path        String
-  referrer    String?
-  utmSource   String?
-  utmMedium   String?
-  utmCampaign String?
-  clickX      Float?   // Heatmap X percentage (0-100)
-  clickY      Float?   // Heatmap Y percentage (0-100)
-  scrollDepth Int?     // Percentage (0-100)
-  duration    Int?     // Session time in seconds
-  deviceType  String?  @default("desktop")
-  country     String?  @default("Cameroon")
-  createdAt   DateTime @default(now())
-
-  @@map("web_analytics_events")
-}
-
-model CommunityProject {
-  id            String   @id @default(cuid())
-  title         String
-  description   String   @db.Text
-  communitySlug String
-  targetAmount  Decimal  @default(0) @db.Decimal(14, 2)
-  currentAmount Decimal  @default(0) @db.Decimal(14, 2)
-  status        String   @default("In Progress")
-  coverImage    String?
-  videoUrl      String?
-  images        String[] @default([])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([communitySlug])
-  @@map("community_projects")
 }
