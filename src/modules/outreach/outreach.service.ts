@@ -692,4 +692,42 @@ export class OutreachService {
       where: { id },
     });
   }
+
+  // --- Public Impact Stats CRUD ---
+  async getPublicImpactStats() {
+    return this.prisma.publicImpactStat.findMany({
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async createPublicImpactStat(data: any) {
+    return this.prisma.publicImpactStat.create({
+      data: {
+        key: data.key,
+        value: data.value,
+        label: data.label,
+        section: data.section,
+        order: parseInt(data.order) || 0,
+      }
+    });
+  }
+
+  async updatePublicImpactStat(id: string, data: any) {
+    return this.prisma.publicImpactStat.update({
+      where: { id },
+      data: {
+        ...(data.key && { key: data.key }),
+        ...(data.value && { value: data.value }),
+        ...(data.label && { label: data.label }),
+        ...(data.section && { section: data.section }),
+        ...(data.order !== undefined && { order: parseInt(data.order) || 0 }),
+      }
+    });
+  }
+
+  async deletePublicImpactStat(id: string) {
+    return this.prisma.publicImpactStat.delete({
+      where: { id },
+    });
+  }
 }

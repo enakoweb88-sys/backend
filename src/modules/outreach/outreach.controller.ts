@@ -122,4 +122,25 @@ export class OutreachController {
   async deleteCommunityProject(@Param('id') id: string) {
     return this.outreachService.deleteCommunityProject(id);
   }
+
+  // --- Public Impact Stats ---
+  @Get('public-impact-stats')
+  async getPublicImpactStats() {
+    return this.outreachService.getPublicImpactStats();
+  }
+
+  @Post('public-impact-stats')
+  async createPublicImpactStat(@Body() data: any) {
+    return this.outreachService.createPublicImpactStat(data);
+  }
+
+  @Put('public-impact-stats/:id')
+  async updatePublicImpactStat(@Param('id') id: string, @Body() data: any) {
+    return this.outreachService.updatePublicImpactStat(id, data);
+  }
+
+  @Delete('public-impact-stats/:id')
+  async deletePublicImpactStat(@Param('id') id: string) {
+    return this.outreachService.deletePublicImpactStat(id);
+  }
 }
