@@ -81,7 +81,7 @@ export class TransactionsService {
       }),
       this.prisma.transaction.findMany({
         where,
-        select: { createdAt: true, amount: true, status: true, type: true, channel: true }
+        select: { createdAt: true, amount: true, amountInXaf: true, status: true, type: true, channel: true }
       }),
       this.prisma.transaction.findMany({
         where: { status: 'FAILED' },
@@ -100,7 +100,7 @@ export class TransactionsService {
          const d = new Date(tx.createdAt).getDay();
          const adj = d === 0 ? 6 : d - 1;
          return adj === idx;
-      }).reduce((sum, tx) => sum + Number(tx.amount), 0);
+      }).reduce((sum, tx: any) => sum + Number(tx.amountInXaf ?? tx.amount), 0);
       return { name: day, volume: vol };
     });
 
@@ -124,9 +124,9 @@ export class TransactionsService {
     ).map(([name, value]) => ({ name, value }));
 
     const revenueTypes = ['Operational', 'Income', 'Transfer', 'Expense', 'Receive', 'Send'];
-    const totalRev = allTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
+    const totalRev = allTransactions.reduce((sum, tx: any) => sum + Number(tx.amountInXaf ?? tx.amount), 0);
     const topRevenueSources = revenueTypes.map(rt => {
-      const amount = allTransactions.filter(tx => tx.type === rt).reduce((sum, tx) => sum + Number(tx.amount), 0);
+      const amount = allTransactions.filter(tx => tx.type === rt).reduce((sum, tx: any) => sum + Number(tx.amountInXaf ?? tx.amount), 0);
       return {
         name: rt,
         amount,
@@ -136,7 +136,7 @@ export class TransactionsService {
 
     const summary = {
       totalVolume: totalRev,
-      totalRevenue: allTransactions.filter(tx => tx.type === 'Income' || tx.type === 'Receive').reduce((sum, tx) => sum + Number(tx.amount), 0),
+      totalRevenue: allTransactions.filter(tx => tx.type === 'Income' || tx.type === 'Receive').reduce((sum, tx: any) => sum + Number(tx.amountInXaf ?? tx.amount), 0),
       successRate: allTransactions.length > 0 ? Math.round((allTransactions.filter(tx => tx.status === 'SETTLED').length / allTransactions.length) * 1000) / 10 : 0,
       avgValue: allTransactions.length > 0 ? Math.round(totalRev / allTransactions.length) : 0
     };
@@ -167,6 +167,8 @@ export class TransactionsService {
         type: dto.type ?? 'Operational',
         description: dto.description,
         amount: dto.amount,
+        amountInXaf: dto.amountInXaf,
+        exchangeRate: dto.exchangeRate,
         currency: dto.currency ?? 'XAF',
         channel: dto.channel,
         charges: dto.charges ?? 0,
@@ -176,7 +178,7 @@ export class TransactionsService {
     });
 
     if (isReceiveFloat) {
-      await this.updateFloat(dto.channel!, Number(dto.amount), 0, 'in');
+      await this.updateFloat(dto.channel!, Number(dto.amountInXaf ?? dto.amount), 0, 'in');
     }
 
     return tx;
@@ -196,7 +198,7 @@ export class TransactionsService {
     });
 
     if (status === TransactionStatus.SETTLED && tx.type === 'Send' && tx.channel) {
-      await this.updateFloat(tx.channel, Number(tx.amount), charges, 'out');
+      await this.updateFloat(tx.channel, Number(tx.amountInXaf ?? tx.amount), charges, 'out');
     }
 
     return updated;

@@ -210,6 +210,16 @@ export class CreateTransactionDto {
   @IsNumber()
   amount!: number;
 
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  amountInXaf?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  exchangeRate?: number;
+
   @IsString()
   @IsOptional()
   currency?: string = 'XAF';

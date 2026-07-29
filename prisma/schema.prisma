@@ -192,20 +192,22 @@ model Expense {
 }
 
 model Transaction {
-  id          String            @id @default(cuid())
-  reference   String            @unique
-  entity      String
-  amount      Decimal           @db.Decimal(14, 2)
-  currency    String            @default("XAF")
-  type        String
-  status      TransactionStatus @default(PENDING)
-  proofUrl    String?
-  settledAt   DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  description String?
-  channel     String?
-  charges     Decimal?          @default(0) @db.Decimal(14, 2)
+  id           String            @id @default(cuid())
+  reference    String            @unique
+  entity       String
+  amount       Decimal           @db.Decimal(14, 2)
+  currency     String            @default("XAF")
+  amountInXaf  Decimal?          @db.Decimal(14, 2)
+  exchangeRate Decimal?          @db.Decimal(14, 4)
+  type         String
+  status       TransactionStatus @default(PENDING)
+  proofUrl     String?
+  settledAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  description  String?
+  channel      String?
+  charges      Decimal?          @default(0) @db.Decimal(14, 2)
 
   @@index([status])
   @@index([createdAt])
