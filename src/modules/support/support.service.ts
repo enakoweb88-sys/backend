@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtUser } from '../../common/current-user.decorator';
 
 @Injectable()
 export class SupportService {
   constructor(private prisma: PrismaService) {}
 
-  async getTickets() {
+  async getTickets(user: JwtUser) {
+    const isAdmin = user.role === 'CEO' || user.role === 'MANAGER' || user.role === 'SUPPORT';
+    const whereClause = isAdmin ? {} : { clientEmail: user.email };
+
     const items = await this.prisma.supportTicket.findMany({ 
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: { replies: { orderBy: { createdAt: 'asc' } } }
     });

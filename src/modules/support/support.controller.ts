@@ -9,17 +9,18 @@ export class SupportController {
 
   @UseGuards(JwtAuthGuard)
   @Get('tickets')
-  getTickets() {
-    return this.supportService.getTickets();
+  getTickets(@CurrentUser() user: JwtUser) {
+    return this.supportService.getTickets(user);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('tickets/contact')
-  async contact(@Body() body: { name: string; email: string; subject: string; message: string }) {
+  async contact(@Body() body: { subject: string; description: string; priority?: string }, @CurrentUser() user: JwtUser) {
     return this.supportService.createTicket({
-      customer: body.name,
-      email: body.email,
+      customer: user.email.split('@')[0],
+      email: user.email,
       subject: body.subject,
-      description: body.message
+      description: body.description
     });
   }
 
