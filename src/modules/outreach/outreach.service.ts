@@ -495,6 +495,17 @@ export class OutreachService {
   }
 
   async getWebInsights(site: string = 'outreach') {
+    if (site === 'main') {
+      return {
+        consent: { total: 0, accepted: 0, declined: 0, rate: 0 },
+        traffic: { totalEvents: 0, pageviews: 0, avgDurationSeconds: 0, bounceRatePercent: 0 },
+        heatmaps: [],
+        campaigns: [],
+        topPages: [],
+        recentEvents: []
+      };
+    }
+
     const [
       totalConsent,
       acceptedConsent,
@@ -545,9 +556,6 @@ export class OutreachService {
     let consentRate = totalConsent > 0 ? Math.round((acceptedConsent / totalConsent) * 100) : 0;
     let avgDurationSeconds = Math.round(avgDurationAggr._avg?.duration || 0);
 
-    const isMain = site === 'main';
-    const mult = isMain ? 15 : 1;
-
     const pathTitleMap: Record<string, string> = {
       '/': 'Home Page',
       '/about': 'About Us',
@@ -571,29 +579,29 @@ export class OutreachService {
     const topPages = topPagesGrouped.map((item) => ({
       path: item.path,
       title: pathTitleMap[item.path] || item.path,
-      views: item._count.path * mult,
+      views: item._count.path,
       avgTime: avgDurationSeconds > 0 ? `${Math.floor(avgDurationSeconds / 60)}m ${avgDurationSeconds % 60}s` : '0m 45s'
     }));
 
     const campaigns = (campaignsGrouped as any[]).map((c: any) => ({
       name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
       channel: c.utmSource || 'Organic Search',
-      clicks: c._count._all * mult,
-      conversions: Math.round(c._count._all * 0.12) * mult,
+      clicks: c._count._all,
+      conversions: Math.round(c._count._all * 0.12),
       roi: c.utmSource ? '+185%' : 'Organic'
     }));
 
     return {
       consent: {
-        total: totalConsent * mult,
-        accepted: acceptedConsent * mult,
-        declined: declinedConsent * mult,
-        rate: isMain ? Math.min(consentRate + 18, 98) : consentRate,
+        total: totalConsent,
+        accepted: acceptedConsent,
+        declined: declinedConsent,
+        rate: consentRate,
       },
       traffic: {
-        totalEvents: totalEvents * mult,
-        pageviews: pageviews * mult,
-        avgDurationSeconds: isMain ? avgDurationSeconds + 60 : avgDurationSeconds,
+        totalEvents: totalEvents,
+        pageviews: pageviews,
+        avgDurationSeconds: avgDurationSeconds,
         bounceRatePercent: totalEvents > 0 ? Math.round(((totalEvents - pageviews) / Math.max(1, totalEvents)) * 100) : 0,
       },
       heatmaps: clicks,
