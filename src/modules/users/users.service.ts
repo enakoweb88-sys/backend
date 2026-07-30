@@ -101,6 +101,7 @@ export class UsersService {
     const updated = await this.prisma.user.update({
       where: { id: user.sub },
       data: {
+        ...(dto.email ? { email: dto.email } : {}),
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.title !== undefined ? { title: dto.title } : {}),

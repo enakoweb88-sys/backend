@@ -167,6 +167,10 @@ export class UpdateEmployeeDto {
 // ─── Users (Self) ─────────────────────────────────────────────────────────────
 
 export class UpdateMeDto {
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
   @IsString()
   @IsOptional()
   fullName?: string;
