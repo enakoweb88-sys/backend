@@ -515,6 +515,7 @@ export class OutreachService {
       clicks,
       topPagesGrouped,
       campaignsGrouped,
+      conversionsGrouped,
       recentEvents,
       avgDurationAggr,
     ] = await Promise.all([
@@ -542,6 +543,11 @@ export class OutreachService {
         _count: { _all: true, utmSource: true },
         orderBy: { _count: { utmSource: 'desc' } },
         take: 10
+      }),
+      this.prisma.webAnalyticsEvent.groupBy({
+        by: ['utmSource', 'utmCampaign'],
+        where: { utmSource: { not: null }, eventType: 'conversion' },
+        _count: { _all: true },
       }),
       this.prisma.webAnalyticsEvent.findMany({
         take: 50,
@@ -583,13 +589,26 @@ export class OutreachService {
       avgTime: avgDurationSeconds > 0 ? `${Math.floor(avgDurationSeconds / 60)}m ${avgDurationSeconds % 60}s` : '0m 45s'
     }));
 
-    const campaigns = (campaignsGrouped as any[]).map((c: any) => ({
-      name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
-      channel: c.utmSource || 'Organic Search',
-      clicks: c._count._all,
-      conversions: Math.round(c._count._all * 0.12),
-      roi: c.utmSource ? '+185%' : 'Organic'
-    }));
+    const campaigns = (campaignsGrouped as any[]).map((c: any) => {
+      const conv = (conversionsGrouped as any[]).find(
+        (cg) => cg.utmSource === c.utmSource && cg.utmCampaign === c.utmCampaign
+      );
+      const conversionCount = conv ? conv._count._all : 0;
+      
+      let roi = 'Organic';
+      if (c.utmSource && c._count._all > 0) {
+        const rate = ((conversionCount / c._count._all) * 100).toFixed(1);
+        roi = `${rate}% Rate`;
+      }
+      
+      return {
+        name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
+        channel: c.utmSource || 'Organic Search',
+        clicks: c._count._all,
+        conversions: conversionCount,
+        roi
+      };
+    });
 
     return {
       consent: {
