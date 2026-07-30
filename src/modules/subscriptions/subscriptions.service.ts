@@ -21,6 +21,9 @@ export class SubscriptionsService {
       data: {
         name: dto.name,
         cost: dto.cost,
+        currency: dto.currency || 'USD',
+        costInXaf: dto.costInXaf,
+        exchangeRate: dto.exchangeRate,
         cycle: dto.cycle,
         status: 'Active',
         startDate: new Date(dto.startDate),

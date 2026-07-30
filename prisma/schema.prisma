@@ -678,6 +678,9 @@ model Subscription {
   id          String   @id @default(cuid())
   name        String
   cost        Decimal  @db.Decimal(14, 2)
+  currency    String   @default("USD")
+  costInXaf   Decimal? @db.Decimal(14, 2)
+  exchangeRate Decimal? @db.Decimal(14, 4)
   cycle       String
   status      String   @default("Active")
   nextBilling DateTime

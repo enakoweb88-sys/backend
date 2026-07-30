@@ -525,6 +525,20 @@ export class CreateSubscriptionDto {
   cost!: number;
 
   @IsString()
+  @IsOptional()
+  currency?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  costInXaf?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  exchangeRate?: number;
+
+  @IsString()
   cycle!: string;
 
   @IsString()
