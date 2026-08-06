@@ -59,8 +59,9 @@ export class PixiPayService {
 
       return { uuid, data: response.data };
     } catch (error: any) {
-      this.logger.error('Failed to submit PixiPay requestToPay:', error.response?.data || error.message);
-      return { error: 'Failed to submit PixiPay payment' };
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to submit PixiPay payment';
+      this.logger.error('Failed to submit PixiPay requestToPay:', errorMsg);
+      return { error: `PixiPay Error: ${errorMsg}` };
     }
   }
 
