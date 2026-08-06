@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { createClient } from '@supabase/supabase-js';
 import { OutreachApplicationType, ApplicationStatus } from '@prisma/client';
@@ -89,7 +89,7 @@ export class OutreachService {
         // Mark as failed
         console.error('MTN Payment initiation failed:', response.error);
         await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new Error(response.error || 'Failed to initiate MTN Payment');
+        throw new BadRequestException(response.error || 'Failed to initiate MTN Payment');
       }
 
       return {
@@ -114,7 +114,7 @@ export class OutreachService {
       if (response.error || !response.uuid) {
         console.error('PixiPay Payment initiation failed:', response.error);
         await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new Error(response.error || 'Failed to initiate Orange Money Payment');
+        throw new BadRequestException(response.error || 'Failed to initiate Orange Money Payment');
       }
 
       return {
