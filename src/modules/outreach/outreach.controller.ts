@@ -24,6 +24,16 @@ export class OutreachController {
     return this.outreachService.getDonationStatus(uuid, token, donationId);
   }
 
+  @Post('donations/webhook/orange')
+  async handleOrangeWebhook(@Body() payload: any) {
+    return this.outreachService.handleOrangeWebhook(payload);
+  }
+
+  @Post('donations/webhook/mtn')
+  async handleMtnWebhook(@Body() payload: any) {
+    return this.outreachService.handleMtnWebhook(payload);
+  }
+
   @Get('donations')
   async getDonations() {
     return this.outreachService.getDonations();

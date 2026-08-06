@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { createClient } from '@supabase/supabase-js';
 import { OutreachApplicationType, ApplicationStatus } from '@prisma/client';
 import { MtnService } from './mtn.service';
+import { PixiPayService } from './pixipay.service';
 
 @Injectable()
 export class OutreachService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mtnService: MtnService
+    private readonly mtnService: MtnService,
+    private readonly pixiPayService: PixiPayService
   ) {}
 
   private async uploadToSupabase(base64Data: string, prefix: string): Promise<string | null> {
@@ -96,6 +98,30 @@ export class OutreachService {
         paymentUuid: response.uuid,
         status: 'PENDING'
       };
+    } else if (cleanData.method === 'ORANGE') {
+      const webhookUrl = process.env.WEBHOOK_BASE_URL 
+        ? `${process.env.WEBHOOK_BASE_URL}/outreach/donations/webhook/orange` 
+        : undefined;
+      
+      const response = await this.pixiPayService.requestToPay({
+        amount: cleanData.amount,
+        phone: phone || '',
+        externalId: donation.id,
+        description: `Donation for ${cleanData.sector}`,
+        callbackUrl: webhookUrl
+      });
+
+      if (response.error || !response.uuid) {
+        console.error('PixiPay Payment initiation failed:', response.error);
+        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
+        throw new Error(response.error || 'Failed to initiate Orange Money Payment');
+      }
+
+      return {
+        donation,
+        paymentUuid: response.uuid,
+        status: 'PENDING'
+      };
     }
 
     // For Bank transfer, we can just return it as pending or completed based on your flow
@@ -105,9 +131,18 @@ export class OutreachService {
     };
   }
 
-  async getDonationStatus(uuid: string, token: string, donationId: string) {
-    const result = await this.mtnService.checkPaymentStatus(uuid, token);
+  async getDonationStatus(uuid: string, token: string | undefined, donationId: string) {
+    const donation = await this.prisma.donation.findUnique({ where: { id: donationId } });
+    if (!donation) return { status: 'UNKNOWN' };
+
+    let result: any = null;
     
+    if (donation.method === 'MTN') {
+      result = await this.mtnService.checkPaymentStatus(uuid, token || '');
+    } else if (donation.method === 'ORANGE') {
+      result = await this.pixiPayService.checkPaymentStatus(uuid);
+    }
+
     if (!result) {
       return { status: 'UNKNOWN' };
     }
@@ -227,6 +262,55 @@ export class OutreachService {
     ];
 
     return results;
+  }
+
+  async handleOrangeWebhook(payload: any) {
+    console.log('Received PixiPay Webhook:', payload);
+    const reference = payload.reference;
+    let status: any = 'UNKNOWN';
+
+    if (['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(payload.status?.toUpperCase())) {
+      status = 'SETTLED';
+    } else if (['FAILED', 'ERROR', 'REJECTED'].includes(payload.status?.toUpperCase())) {
+      status = 'FAILED';
+    }
+
+    if (reference && status !== 'UNKNOWN') {
+      try {
+        await this.prisma.donation.update({
+          where: { id: reference },
+          data: { status }
+        });
+      } catch (err) {
+        console.error('Failed to update donation from Orange webhook', err);
+      }
+    }
+    return { received: true };
+  }
+
+  async handleMtnWebhook(payload: any) {
+    console.log('Received MTN Webhook:', payload);
+    const externalId = payload.externalId;
+    const moMoStatus = payload.status;
+    let status: any = 'UNKNOWN';
+
+    if (moMoStatus === 'SUCCESSFUL') {
+      status = 'SETTLED';
+    } else if (moMoStatus === 'FAILED') {
+      status = 'FAILED';
+    }
+
+    if (externalId && status !== 'UNKNOWN') {
+      try {
+        await this.prisma.donation.update({
+          where: { id: externalId },
+          data: { status }
+        });
+      } catch (err) {
+        console.error('Failed to update donation from MTN webhook', err);
+      }
+    }
+    return { received: true };
   }
 
   async getDonations() {

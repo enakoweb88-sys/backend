@@ -31,11 +31,11 @@ export class MtnService {
   }
 
   private get apiUser() {
-    return process.env.MTN_PAYMENTS_API_USER || process.env.PAYMENTS_API_USER || '';
+    return process.env.MTN_DEPOSIT_API_USER || process.env.DEPOSIT_API_USER || '';
   }
 
   private get apiKey() {
-    return process.env.MTN_PAYMENTS_API_KEY || process.env.PAYMENTS_API_KEY || '';
+    return process.env.MTN_DEPOSIT_API_KEY || process.env.DEPOSIT_API_KEY || '';
   }
 
   private get targetEnvironment() {
