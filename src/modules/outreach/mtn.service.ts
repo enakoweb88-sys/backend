@@ -77,6 +77,12 @@ export class MtnService {
     const uuid = crypto.randomUUID();
 
     try {
+      // Ensure phone number starts with 237 for Cameroon MTN
+      let formattedPhone = phone.replace(/[^0-9]/g, '');
+      if (formattedPhone.length === 9 && (formattedPhone.startsWith('67') || formattedPhone.startsWith('65') || formattedPhone.startsWith('68') || formattedPhone.startsWith('69'))) {
+        formattedPhone = '237' + formattedPhone;
+      }
+      
       const response = await axios.post(
         `${this.baseUrl}/collection/v1_0/requesttopay`,
         {
@@ -85,7 +91,7 @@ export class MtnService {
           externalId,
           payer: {
             partyIdType: 'MSISDN',
-            partyId: phone
+            partyId: formattedPhone
           },
           payerMessage,
           payeeNote: payeeMessage

@@ -40,9 +40,14 @@ export class PixiPayService {
 
       const uuid = crypto.randomUUID();
 
+      let formattedPhone = phone.replace(/[^0-9]/g, '');
+      if (formattedPhone.length === 9) {
+        formattedPhone = '237' + formattedPhone;
+      }
+
       const payload = {
         amount: Number(amount),
-        phone: phone,
+        phone: formattedPhone,
         serviceId: this.cashInServiceId,
         reference: externalId, // Internal donation ID
         description: description,
