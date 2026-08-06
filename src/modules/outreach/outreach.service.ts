@@ -160,7 +160,7 @@ export class OutreachService {
         where: { id: donationId },
         data: { status: 'FAILED' }
       });
-      return { status: 'FAILED' };
+      return { status: 'FAILED', reason: result.reason || 'Payment failed' };
     }
 
     return { status: 'PENDING' };
