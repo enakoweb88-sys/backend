@@ -84,9 +84,6 @@ async function main() {
     await prisma.outreachEvent.deleteMany();
     await prisma.blogPost.deleteMany();
     await prisma.newsletterSubscriber.deleteMany();
-    await prisma.publicImpactStat.deleteMany();
-    await prisma.publicMilestone.deleteMany();
-    await prisma.publicImpactChart.deleteMany();
     await prisma.donation.deleteMany();
     await prisma.communityProject.deleteMany();
 
