@@ -33,7 +33,7 @@ export class MailService {
   }
 
   async sendMail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
-    const from = process.env.SMTP_FROM || `"ENAKO Outreach" <${process.env.SMTP_USER || 'enakooutreach@gmail.com'}>`;
+    const from = process.env.SMTP_FROM || `"ENAKO Support" <${process.env.SMTP_USER || 'enakosupport@gmail.com'}>`;
     
     if (!this.transporter) {
       // Re-check in case ENV was updated at runtime
