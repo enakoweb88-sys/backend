@@ -127,6 +127,8 @@ export class MtnService {
         }
       );
 
+      this.logger.log(`Raw MTN response for ${uuid}: ${JSON.stringify(response.data)}`);
+
       const data = response.data;
       return {
         referenceId: data.externalId,
