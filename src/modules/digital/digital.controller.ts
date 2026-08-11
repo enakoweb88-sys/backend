@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { DigitalService } from './digital.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
@@ -6,6 +6,23 @@ import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class DigitalController {
   constructor(private readonly digitalService: DigitalService) {}
+
+  @Get('posts')
+  getPosts() { return this.digitalService.getPosts(); }
+
+  @Post('posts')
+  createPost(@Body() dto: any) { return this.digitalService.createPost(dto); }
+
+  @Patch('posts/:id/status')
+  updatePostStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.digitalService.updatePostStatus(id, status);
+  }
+
+  @Get('campaigns')
+  getCampaigns() { return this.digitalService.getCampaigns(); }
+
+  @Post('campaigns')
+  createCampaign(@Body() dto: any) { return this.digitalService.createCampaign(dto); }
 
   @Get('calendar')
   getCalendar() { return this.digitalService.getCalendar(); }
