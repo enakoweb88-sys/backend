@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtUser } from '../../common/current-user.decorator';
 
@@ -72,6 +72,9 @@ export class ReportsService {
   }
 
   createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, user: JwtUser) {
+    if (!body.content || body.content.trim().length === 0) {
+      throw new BadRequestException('Report content cannot be empty. Please fill in all required fields.');
+    }
     return this.prisma.dailyReport.create({
       data: {
         content: body.content,
