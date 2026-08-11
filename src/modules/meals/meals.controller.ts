@@ -17,7 +17,12 @@ export class MealsController {
   }
 
   @Post()
-  record(@Body() dto: MealDto) {
+  record(@Body() dto: MealDto, @CurrentUser() user: JwtUser) {
+    // Non-managers can ONLY log their own personal meals
+    if (user.role !== 'MANAGER' && user.role !== 'OUTREACH_MANAGER') {
+      dto.employeeId = user.sub;
+    }
+    dto.price = 1000; // Fixed delivery meal price (1,000 FCFA)
     return this.meals.record(dto);
   }
 

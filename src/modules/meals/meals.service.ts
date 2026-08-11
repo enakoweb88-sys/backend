@@ -25,9 +25,9 @@ export class MealsService {
   }
 
   record(dto: MealDto) {
-    const totalAmount = dto.price ?? 1000;
-    const companyAmount = Math.floor(totalAmount / 2);
-    const employeeAmount = Math.ceil(totalAmount / 2);
+    const totalAmount = 1000; // Fixed daily delivery price (1,000 FCFA)
+    const companyAmount = 500; // 50% paid by company
+    const employeeAmount = 500; // 50% paid by employee
 
     return this.prisma.mealRecord.upsert({
       where: { employeeId_date: { employeeId: dto.employeeId, date: new Date(dto.date) } },
