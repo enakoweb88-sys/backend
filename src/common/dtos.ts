@@ -109,6 +109,10 @@ export class CreateEmployeeDto {
 }
 
 export class UpdateEmployeeDto {
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
   @IsString()
   @IsOptional()
   fullName?: string;

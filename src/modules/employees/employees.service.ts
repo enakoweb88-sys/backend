@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { RoleName, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateEmployeeDto, QueryDto, UpdateEmployeeDto } from '../../common/dtos';
@@ -79,6 +79,15 @@ export class EmployeesService {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Employee not found');
 
+    if (dto.email && dto.email.toLowerCase() !== existing.email.toLowerCase()) {
+      const emailTaken = await this.prisma.user.findFirst({
+        where: { email: dto.email.toLowerCase(), id: { not: id } }
+      });
+      if (emailTaken) {
+        throw new BadRequestException('Another user account is already using this corporate email address.');
+      }
+    }
+
     const role = dto.role
       ? await this.prisma.role.upsert({ where: { name: dto.role as RoleName }, update: {}, create: { name: dto.role as RoleName } })
       : null;
@@ -89,6 +98,7 @@ export class EmployeesService {
     const user = await this.prisma.user.update({
       where: { id },
       data: {
+        ...(dto.email ? { email: dto.email.toLowerCase() } : {}),
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.title !== undefined ? { title: dto.title } : {}),
