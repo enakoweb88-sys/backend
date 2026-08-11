@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityService } from '../security/security.service';
 import { LoginDto } from './dto';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly securityService: SecurityService,
   ) {}
 
   async login(dto: LoginDto, ip?: string, device?: string) {
@@ -20,11 +22,34 @@ export class AuthService {
       where: { email: dto.email.toLowerCase() },
       include: { role: true, department: true, ledDepartments: true },
     });
-    if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException('Invalid credentials');
-    if (user.role.name !== dto.role) throw new ForbiddenException('This account is not assigned to the selected role');
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      this.securityService.reportSecurityBreach('FAILED_LOGIN_ATTEMPT', {
+        email: dto.email,
+        ip,
+        reason: 'Attempted login to non-existent or inactive user account.',
+      }).catch(() => {});
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.role.name !== dto.role) {
+      this.securityService.reportSecurityBreach('ROLE_MISMATCH_ATTEMPT', {
+        email: dto.email,
+        ip,
+        reason: `Attempted login with unassigned role ${dto.role} (Actual role: ${user.role.name}).`,
+      }).catch(() => {});
+      throw new ForbiddenException('This account is not assigned to the selected role');
+    }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!valid) {
+      this.securityService.reportSecurityBreach('INVALID_PASSWORD_ATTEMPT', {
+        email: dto.email,
+        ip,
+        reason: 'Incorrect password entered during login attempt.',
+      }).catch(() => {});
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     const [_, userSession, tokens] = await Promise.all([
       this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
@@ -74,6 +99,13 @@ export class AuthService {
         where: { id: tokenRecord.id },
         data: { revokedAt: new Date() }
       });
+
+      this.securityService.reportSecurityBreach('IP_HIJACKING_ATTEMPT', {
+        email: tokenRecord.user?.email,
+        ip,
+        reason: `Session terminated due to IP address change from ${tokenRecord.ipAddress} to ${ip}.`,
+      }).catch(() => {});
+
       throw new UnauthorizedException('Session terminated due to IP address change. Please log in again.');
     }
 
