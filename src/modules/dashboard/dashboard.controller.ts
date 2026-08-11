@@ -34,4 +34,9 @@ export class DashboardController {
   employeeBreakdown() {
     return this.dashboard.getEmployeeBreakdown();
   }
+
+  @Get('engineering')
+  engineeringOverview() {
+    return this.dashboard.getEngineeringOverview();
+  }
 }
