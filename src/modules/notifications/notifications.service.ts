@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   findAll(userId: string) {
     return this.prisma.notification.findMany({
@@ -35,7 +39,7 @@ export class NotificationsService {
     type?: NotificationType;
     link?: string;
   }) {
-    return this.prisma.notification.create({
+    const notif = await this.prisma.notification.create({
       data: {
         userId: data.userId,
         title: data.title,
@@ -44,6 +48,18 @@ export class NotificationsService {
         link: data.link,
       },
     });
+
+    // Send email alert to employee's linked account email
+    const recipient = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { email: true },
+    });
+
+    if (recipient?.email) {
+      this.mailService.sendNotificationAlert(recipient.email, data.title, data.body, data.link).catch(() => {});
+    }
+
+    return notif;
   }
 
   async createForAll(data: {
@@ -58,7 +74,7 @@ export class NotificationsService {
         status: 'ACTIVE',
         ...(data.excludeUserId ? { id: { not: data.excludeUserId } } : {}),
       },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!users.length) return;
@@ -72,6 +88,13 @@ export class NotificationsService {
         link: data.link,
       })),
     });
+
+    // Dispatch email alert to all active employees at their linked account emails
+    for (const u of users) {
+      if (u.email) {
+        this.mailService.sendNotificationAlert(u.email, data.title, data.body, data.link).catch(() => {});
+      }
+    }
   }
 
   async deleteRead(userId: string) {
