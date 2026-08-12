@@ -40,6 +40,13 @@ export class EmployeesService {
   }
 
   async create(dto: CreateEmployeeDto) {
+    const existingEmail = await this.prisma.user.findUnique({
+      where: { email: dto.email.toLowerCase() }
+    });
+    if (existingEmail) {
+      throw new BadRequestException(`An account already exists with corporate email "${dto.email}". Please use a different corporate email address.`);
+    }
+
     const role = await this.prisma.role.upsert({
       where: { name: dto.role as RoleName },
       update: {},
