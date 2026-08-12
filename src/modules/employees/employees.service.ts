@@ -3,10 +3,14 @@ import { RoleName, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateEmployeeDto, QueryDto, UpdateEmployeeDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class EmployeesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async list(query: QueryDto) {
     const page = query.page ?? 1;
@@ -72,6 +76,17 @@ export class EmployeesService {
       },
       include: { role: true, department: true, ledDepartments: true },
     });
+
+    // Send welcome onboarding email (non-blocking)
+    this.mail.sendWelcomeEmail({
+      toEmail: dto.email.toLowerCase(),
+      fullName: dto.fullName,
+      department: dto.department || 'General',
+      position: dto.title || 'Team Member',
+      password: dto.password,
+      loginEmail: dto.email.toLowerCase(),
+    }).catch(err => console.error('Welcome email failed:', err));
+
     return this.toEmployee(user);
   }
 
@@ -123,6 +138,16 @@ export class EmployeesService {
       },
       include: { role: true, department: true, ledDepartments: true },
     });
+
+    // If corporate email changed, notify employee at their new email
+    if (dto.email && dto.email.toLowerCase() !== existing.email.toLowerCase()) {
+      this.mail.sendCorporateEmailUpdated(
+        dto.email.toLowerCase(),
+        existing.fullName,
+        existing.email,
+      ).catch(err => console.error('Corporate email update notification failed:', err));
+    }
+
     return this.toEmployee(user);
   }
 
