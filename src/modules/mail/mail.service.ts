@@ -19,9 +19,7 @@ export class MailService {
 
     if (user && pass) {
       this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465, // true for 465, false for 587
+        service: 'gmail',
         auth: {
           user,
           pass,
@@ -30,7 +28,7 @@ export class MailService {
           rejectUnauthorized: false
         }
       });
-      this.logger.log(`SMTP Mailer initialized using ${host}:${port} (${user})`);
+      this.logger.log(`SMTP Mailer initialized using Gmail Service (${user})`);
     } else {
       this.logger.warn('SMTP_PASS is not configured. Email notifications will be logged to console in dev mode.');
     }
