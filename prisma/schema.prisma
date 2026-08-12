@@ -53,6 +53,8 @@ model User {
   hireDate             DateTime?
   personalEmail        String?
   salary               Decimal?              @db.Decimal(14, 2)
+  responsibilities     String?
+  goalsText            String?
   activityLogs         ActivityLog[]
   announcementComments AnnouncementComment[]
   announcementLikes    AnnouncementLike[]

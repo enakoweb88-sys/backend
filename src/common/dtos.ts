@@ -106,6 +106,14 @@ export class CreateEmployeeDto {
   @IsString({ each: true })
   @IsOptional()
   ledDepartments?: string[];
+
+  @IsString()
+  @IsOptional()
+  responsibilities?: string;
+
+  @IsString()
+  @IsOptional()
+  goals?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -166,6 +174,14 @@ export class UpdateEmployeeDto {
   @IsString({ each: true })
   @IsOptional()
   ledDepartments?: string[];
+
+  @IsString()
+  @IsOptional()
+  responsibilities?: string;
+
+  @IsString()
+  @IsOptional()
+  goals?: string;
 }
 
 // ─── Users (Self) ─────────────────────────────────────────────────────────────

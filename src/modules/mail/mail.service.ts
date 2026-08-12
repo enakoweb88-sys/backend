@@ -277,8 +277,10 @@ export class MailService {
     position: string;
     password: string;
     loginEmail: string;
+    responsibilities?: string;
+    goals?: string;
   }) {
-    const { toEmail, fullName, department, position, password, loginEmail } = opts;
+    const { toEmail, fullName, department, position, password, loginEmail, responsibilities, goals } = opts;
     const firstName = fullName.split(' ')[0];
 
     const html = `
@@ -411,6 +413,18 @@ export class MailService {
       <li><strong>Initiative:</strong> We value team members who identify opportunities for improvement and take action. If you see something that could be done better, raise it with your department head.</li>
       <li><strong>KPI Alignment:</strong> Your work will be measured against clear Key Performance Indicators (KPIs) set by your manager and visible in your ENAKO OS Performance Dashboard. Review them regularly.</li>
     </ul>
+
+    ${responsibilities ? `
+    <div style="background:#f8fafc;border-left:4px solid #1c4980;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0 0 6px;font-size:13px;color:#1c4980;font-weight:700;">📌 Your Assigned Core Responsibilities:</p>
+      <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">${responsibilities}</p>
+    </div>` : ''}
+
+    ${goals ? `
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px;border-radius:6px;margin:16px 0 24px;">
+      <p style="margin:0 0 6px;font-size:13px;color:#15803d;font-weight:700;">🎯 Your Initial Performance Goals:</p>
+      <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">${goals}</p>
+    </div>` : ''}
 
     <!-- SECTION 5: WEEKLY REPORTS -->
     <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:22px;margin-bottom:28px;">

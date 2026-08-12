@@ -65,6 +65,8 @@ export class EmployeesService {
         salary: dto.salary,
         emergencyContact: dto.emergencyContact,
         hireDate: dto.hireDate ? new Date(dto.hireDate) : null,
+        responsibilities: dto.responsibilities,
+        goalsText: dto.goals,
         ...(dto.ledDepartments && dto.ledDepartments.length > 0 ? {
           ledDepartments: {
             connectOrCreate: dto.ledDepartments.map(name => ({
@@ -85,6 +87,8 @@ export class EmployeesService {
       position: dto.title || 'Team Member',
       password: dto.password,
       loginEmail: dto.email.toLowerCase(),
+      responsibilities: dto.responsibilities,
+      goals: dto.goals,
     }).catch(err => console.error('Welcome email failed:', err));
 
     return this.toEmployee(user);
@@ -126,6 +130,8 @@ export class EmployeesService {
         ...(dto.salary !== undefined ? { salary: dto.salary } : {}),
         ...(dto.emergencyContact !== undefined ? { emergencyContact: dto.emergencyContact } : {}),
         ...(dto.hireDate !== undefined ? { hireDate: dto.hireDate ? new Date(dto.hireDate) : null } : {}),
+        ...(dto.responsibilities !== undefined ? { responsibilities: dto.responsibilities } : {}),
+        ...(dto.goals !== undefined ? { goalsText: dto.goals } : {}),
         ...(dto.ledDepartments !== undefined ? {
           ledDepartments: {
             set: [], // clear existing
@@ -194,6 +200,8 @@ export class EmployeesService {
       emergencyContact: user.emergencyContact,
       hireDate: user.hireDate,
       avatarUrl: user.avatarUrl,
+      responsibilities: user.responsibilities ?? null,
+      goals: user.goalsText ?? null,
       ledDepartments: user.ledDepartments?.map((d: any) => d.name) || [],
       createdAt: user.createdAt,
     };
