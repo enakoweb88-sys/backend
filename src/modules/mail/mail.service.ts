@@ -37,26 +37,26 @@ export class MailService {
   }
 
   async sendMail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
-    const from = process.env.SMTP_FROM || `"ENAKO Support" <${process.env.SMTP_USER || 'enakosupport@gmail.com'}>`;
+    const senderUser = (process.env.SMTP_USER || 'enakosupport@gmail.com').trim();
+    const from = `"ENAKO Support" <${senderUser}>`;
     
     if (!this.transporter) {
-      // Re-check in case ENV was updated at runtime
       this.initTransporter();
     }
 
     if (this.transporter) {
       try {
-        await this.transporter.sendMail({
+        const info = await this.transporter.sendMail({
           from,
           to,
           subject,
           text: text || subject,
           html,
         });
-        this.logger.log(`Email successfully sent to ${to}: "${subject}"`);
+        this.logger.log(`Email successfully sent to ${to}: "${subject}" (MessageId: ${info.messageId})`);
         return true;
       } catch (err: any) {
-        this.logger.error(`Failed to send email to ${to}: ${err.message}`);
+        this.logger.error(`Failed to send email to ${to}: ${err.message}`, err.stack);
         return false;
       }
     } else {
