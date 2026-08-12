@@ -13,8 +13,8 @@ export class MailService {
   private initTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const user = process.env.SMTP_USER || 'enakooutreach@gmail.com';
-    const pass = process.env.SMTP_PASS || '';
+    const user = process.env.SMTP_USER || 'enakosupport@gmail.com';
+    const pass = process.env.SMTP_PASS || 'drsg gmlk hqfz kwev';
 
     if (user && pass) {
       this.transporter = nodemailer.createTransport({
@@ -25,6 +25,9 @@ export class MailService {
           user,
           pass,
         },
+        tls: {
+          rejectUnauthorized: false
+        }
       });
       this.logger.log(`SMTP Mailer initialized using ${host}:${port} (${user})`);
     } else {
