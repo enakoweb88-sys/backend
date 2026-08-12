@@ -11,38 +11,28 @@ export class MailService {
   }
 
   private initTransporter() {
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const user = (process.env.SMTP_USER || 'enakosupport@gmail.com').trim();
-    
-    // Normalize 16-character Gmail App Passwords to "xxxx xxxx xxxx xxxx"
-    let rawPass = (process.env.SMTP_PASS || 'drsg gmlk hqfz kwev').trim();
-    const stripped = rawPass.replace(/\s+/g, '');
-    if (stripped.length === 16) {
-      rawPass = stripped.match(/.{1,4}/g)?.join(' ') || rawPass;
-    }
-    const pass = rawPass;
+    // Explicitly use production verified Gmail SMTP credentials
+    const host = 'smtp.gmail.com';
+    const port = 587;
+    const user = 'enakosupport@gmail.com';
+    const pass = 'drsg gmlk hqfz kwev';
 
-    if (user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
-        auth: {
-          user,
-          pass,
-        },
-        tls: {
-          rejectUnauthorized: false
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-      });
-      this.logger.log(`SMTP Mailer initialized using smtp.gmail.com:587 (${user})`);
-    } else {
-      this.logger.warn('SMTP_PASS is not configured. Email notifications will be logged to console in dev mode.');
-    }
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: false,
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    });
+    this.logger.log(`SMTP Mailer initialized using ${host}:${port} (${user})`);
   }
 
   async sendMail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
