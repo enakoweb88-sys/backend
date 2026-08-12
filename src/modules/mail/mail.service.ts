@@ -285,6 +285,7 @@ export class MailService {
   }) {
     const { toEmail, fullName, department, position, password, loginEmail, responsibilities, goals } = opts;
     const firstName = fullName.split(' ')[0];
+    const refCode = Math.floor(1000 + Math.random() * 9000);
 
     const html = `
 <!DOCTYPE html>
@@ -556,7 +557,7 @@ export class MailService {
 
     return this.sendMail(
       toEmail,
-      `🎉 Welcome to ENAKO, ${firstName}! Your Onboarding Guide & Login Credentials`,
+      `🎉 Welcome to ENAKO, ${firstName}! Your Onboarding Guide & Login Credentials [Ref: #${refCode}]`,
       html
     );
   }
