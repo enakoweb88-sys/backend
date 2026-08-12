@@ -86,21 +86,20 @@ export class EmployeesService {
       include: { role: true, department: true, ledDepartments: true },
     });
 
-    // Send welcome onboarding email
-    try {
-      await this.mail.sendWelcomeEmail({
-        toEmail: dto.email.toLowerCase(),
-        fullName: dto.fullName,
-        department: dto.department || 'General',
-        position: dto.title || 'Team Member',
-        password: dto.password,
-        loginEmail: dto.email.toLowerCase(),
-        responsibilities: dto.responsibilities,
-        goals: dto.goals,
-      });
-    } catch (err: any) {
-      console.error('❌ Welcome email dispatch failed:', err?.message || err);
-    }
+    // Send welcome onboarding email asynchronously (non-blocking for fast UI response)
+    this.mail.sendWelcomeEmail({
+      toEmail: dto.email.toLowerCase(),
+      fullName: dto.fullName,
+      department: dto.department || 'General',
+      position: dto.title || 'Team Member',
+      password: dto.password,
+      loginEmail: dto.email.toLowerCase(),
+      responsibilities: dto.responsibilities,
+      goals: dto.goals,
+    }).then(sent => {
+      if (sent) console.log(`✅ Onboarding email successfully sent to ${dto.email}`);
+      else console.warn(`⚠️ Onboarding email was not sent to ${dto.email}`);
+    }).catch(err => console.error('❌ Welcome email dispatch failed:', err));
 
     return this.toEmployee(user);
   }

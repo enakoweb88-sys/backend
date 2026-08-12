@@ -1,25 +1,8 @@
 const axios = require('axios');
-const { PrismaClient } = require('@prisma/client');
-
-const connectionString = "postgresql://postgres.ltdodqloxdpnsvthkowl:enakoos2026@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?connect_timeout=30";
-const prisma = new PrismaClient({ datasources: { db: { url: connectionString } } });
 const PROD_API = 'https://api.enakoos.com/api/v1';
 
-async function testProdSendNow() {
-  const targetEmail = 'enakoweb88@gmail.com';
-
-  console.log(`1. Deleting any existing non-CEO user for ${targetEmail}...`);
-  const u = await prisma.user.findFirst({ where: { email: targetEmail } });
-  if (u) {
-    const ceoRoles = await prisma.role.findMany({ where: { name: 'CEO' } });
-    const ceoRoleIds = ceoRoles.map(r => r.id);
-    if (!ceoRoleIds.includes(u.roleId)) {
-      await prisma.user.delete({ where: { id: u.id } }).catch(() => {});
-      console.log(`✓ Deleted old account for ${targetEmail}`);
-    }
-  }
-
-  console.log('2. Logging in as CEO on production API...');
+async function testPureProdAPI() {
+  console.log('1. Logging in as CEO on production API:', PROD_API);
   const loginRes = await axios.post(`${PROD_API}/auth/login`, {
     email: 'ceo@enako.com',
     password: 'Enako@2025!',
@@ -27,12 +10,15 @@ async function testProdSendNow() {
   });
   const token = loginRes.data.accessToken;
 
-  console.log('3. Sending POST /employees to production API now...');
+  // Generate unique corporate email address for fresh user test
+  const uniqueEmail = `chinji.outreach.${Date.now()}@gmail.com`;
+
+  console.log(`2. Sending POST /employees for ${uniqueEmail} to production API now...`);
   const createRes = await axios.post(
     `${PROD_API}/employees`,
     {
       fullName: 'Chinji Clinton',
-      email: targetEmail,
+      email: uniqueEmail,
       phone: '+237690000000',
       title: 'Outreach Manager',
       role: 'OUTREACH_MANAGER',
@@ -48,15 +34,13 @@ async function testProdSendNow() {
   );
 
   console.log('🎉 Production API Response:', createRes.data);
-  console.log(`📧 Account ID: ${createRes.data.id}. Please check your inbox now!`);
-  await prisma.$disconnect();
+  console.log(`📧 Account ID: ${createRes.data.id} created for ${uniqueEmail}.`);
 }
 
-testProdSendNow().catch(err => {
+testPureProdAPI().catch(err => {
   if (err.response) {
     console.error('❌ Production Error:', err.response.status, JSON.stringify(err.response.data));
   } else {
     console.error('❌ Error:', err.message);
   }
-  prisma.$disconnect();
 });
