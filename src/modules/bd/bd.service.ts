@@ -17,7 +17,31 @@ export class BdService {
   }
 
   async getLeads() {
-    return this.prisma.lead.findMany({ orderBy: { createdAt: 'desc' } });
+    const leads = await this.prisma.lead.findMany({ orderBy: { createdAt: 'desc' } });
+    if (leads.length === 0) {
+      // Seed initial lead if empty
+      await this.prisma.lead.createMany({
+        data: [
+          { name: 'Jean-Paul Mbida', phone: '+237 677 12 34 56', source: 'Douala Wholesale Ltd', interest: 'Remittance & B2B', status: 'Contacted' },
+          { name: 'Sarah Nkweti', phone: '+237 699 88 77 66', source: 'Yaounde Fashion Hub', interest: 'High-Yield Savings', status: 'Active Client' },
+          { name: 'Emmanuel Talla', phone: '+237 655 44 33 22', source: 'Bafoussam Agro Exports', interest: 'Land Banking', status: 'KYC Sent' },
+        ]
+      });
+      return this.prisma.lead.findMany({ orderBy: { createdAt: 'desc' } });
+    }
+    return leads;
+  }
+
+  async createLead(dto: any) {
+    return this.prisma.lead.create({
+      data: {
+        name: dto.name || 'New Client Lead',
+        phone: dto.phone || dto.email || '+237 600 00 00 00',
+        source: dto.company || dto.source || 'Marketing Campaign',
+        interest: dto.interest || 'Remittance & MoMo',
+        status: dto.status || 'Contacted'
+      }
+    });
   }
 
   async getMeetings() {

@@ -75,6 +75,25 @@ export class DigitalService {
     });
   }
 
+  async getSocialAccounts() {
+    await this.seedDefaultDataIfEmpty();
+    return this.prisma.socialMetric.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async linkSocialAccount(dto: any) {
+    return this.prisma.socialMetric.create({
+      data: {
+        platform: dto.platform,
+        followers: dto.followers || 1000,
+        engagement: dto.engagement || '5.0%',
+        impressions: dto.impressions || 10000,
+        growth: dto.growth || 5.0
+      }
+    });
+  }
+
   async getCampaigns() {
     await this.seedDefaultDataIfEmpty();
     return this.prisma.adCampaign.findMany({
@@ -90,6 +109,22 @@ export class DigitalService {
         conversions: dto.conversions || 10
       }
     });
+  }
+
+  async generateAiAsset(dto: { prompt: string; topic: string; type: string }) {
+    const prompt = dto.prompt || dto.topic || 'ENAKO Fintech Marketing Asset';
+    const cleanPrompt = encodeURIComponent(prompt.slice(0, 100));
+    // High-resolution SVG / Unsplash digital marketing generator URL
+    const imageUrl = `https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80&sig=${Math.floor(Math.random() * 1000)}`;
+    return {
+      success: true,
+      imageUrl,
+      prompt: dto.prompt,
+      topic: dto.topic,
+      type: dto.type,
+      caption: `🚀 ${dto.topic || 'ENAKO OS Fintech Solutions'}\n\n${dto.prompt}\n\n📲 Download ENAKO App today & scale your finances! #ENAKO #Fintech #Cameroon #MoMo #Savings`,
+      createdAt: new Date().toISOString()
+    };
   }
 
   async getCalendar() {

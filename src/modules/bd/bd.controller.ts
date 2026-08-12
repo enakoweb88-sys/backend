@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { BdService } from './bd.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
@@ -15,6 +15,11 @@ export class BdController {
   @Get('leads')
   getLeads() {
     return this.bdService.getLeads();
+  }
+
+  @Post('leads')
+  createLead(@Body() dto: any) {
+    return this.bdService.createLead(dto);
   }
 
   @Get('meetings')

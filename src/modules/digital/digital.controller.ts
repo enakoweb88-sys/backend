@@ -18,6 +18,17 @@ export class DigitalController {
     return this.digitalService.updatePostStatus(id, status);
   }
 
+  @Get('accounts')
+  getSocialAccounts() { return this.digitalService.getSocialAccounts(); }
+
+  @Post('accounts')
+  linkSocialAccount(@Body() dto: any) { return this.digitalService.linkSocialAccount(dto); }
+
+  @Post('generate-ai-asset')
+  generateAiAsset(@Body() dto: { prompt: string; topic: string; type: string }) {
+    return this.digitalService.generateAiAsset(dto);
+  }
+
   @Get('campaigns')
   getCampaigns() { return this.digitalService.getCampaigns(); }
 
