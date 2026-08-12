@@ -164,9 +164,12 @@ export class UsersService {
     const newHash = await bcrypt.hash(newPw, 12);
     await this.prisma.user.update({
       where: { id: user.sub },
-      data: { passwordHash: newHash }
+      data: {
+        passwordHash: newHash,
+        passwordChangedAt: new Date()
+      }
     });
-    return { ok: true };
+    return { ok: true, message: 'Password updated successfully' };
   }
 
   async exportData(user: JwtUser) {
@@ -203,19 +206,8 @@ export class UsersService {
             }
           : {}),
       },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        title: true,
-        phone: true,
-        status: true,
-        role: { select: { name: true } },
-        department: { select: { name: true } },
-        createdAt: true,
-        lastLoginAt: true,
-      },
-      orderBy: { fullName: 'asc' },
+      include: { role: true, department: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -225,11 +217,14 @@ export class UsersService {
       include: { role: true, department: true, userSessions: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    
+    return this.toEmployee(user);
+  }
+
+  async toEmployee(user: any) {
     let totalLoginTime = 0;
     let sessionCount = 0;
     if (user.userSessions) {
-      user.userSessions.forEach(session => {
+      user.userSessions.forEach((session: any) => {
         if (session.duration) {
           totalLoginTime += session.duration;
           sessionCount++;
@@ -257,6 +252,7 @@ export class UsersService {
       role: user.role?.name ?? null,
       department: user.department?.name ?? null,
       lastLoginAt: user.lastLoginAt ?? null,
+      passwordChangedAt: user.passwordChangedAt ?? user.createdAt,
       createdAt: user.createdAt,
     };
   }
