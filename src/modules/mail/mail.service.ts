@@ -13,9 +13,15 @@ export class MailService {
   private initTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const user = process.env.SMTP_USER || 'enakosupport@gmail.com';
-    // Allow pass with or without spaces (e.g. "drsg gmlk hqfz kwev" or "drsggmlkhqfzkwev")
-    const pass = (process.env.SMTP_PASS || 'drsg gmlk hqfz kwev').trim();
+    const user = (process.env.SMTP_USER || 'enakosupport@gmail.com').trim();
+    
+    // Normalize 16-character Gmail App Passwords to "xxxx xxxx xxxx xxxx"
+    let rawPass = (process.env.SMTP_PASS || 'drsg gmlk hqfz kwev').trim();
+    const stripped = rawPass.replace(/\s+/g, '');
+    if (stripped.length === 16) {
+      rawPass = stripped.match(/.{1,4}/g)?.join(' ') || rawPass;
+    }
+    const pass = rawPass;
 
     if (user && pass) {
       this.transporter = nodemailer.createTransport({
