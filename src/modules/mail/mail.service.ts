@@ -14,7 +14,8 @@ export class MailService {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
     const user = process.env.SMTP_USER || 'enakosupport@gmail.com';
-    const pass = process.env.SMTP_PASS || 'drsg gmlk hqfz kwev';
+    // Allow pass with or without spaces (e.g. "drsg gmlk hqfz kwev" or "drsggmlkhqfzkwev")
+    const pass = (process.env.SMTP_PASS || 'drsg gmlk hqfz kwev').trim();
 
     if (user && pass) {
       this.transporter = nodemailer.createTransport({
