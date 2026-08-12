@@ -320,15 +320,69 @@ export class MailService {
     </div>
 
     <!-- SECTION 2: ABOUT ENAKO -->
-    <h2 style="font-size:16px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">🏢 Section 2 — About ENAKO: Who We Are & How We Work</h2>
-    <p style="margin:0 0 12px;color:#475569;">
-      ENAKO is a technology-driven financial services company headquartered in Cameroon, with a mission to democratize access to modern, secure, and seamless financial services across Africa and the diaspora. We operate a suite of integrated financial products including mobile money transfers, remittance services, merchant payment settlements (B2B), land banking and real estate investment, Akawo high-yield savings, school fee payment solutions, and employee financial wellness programs.
+    <h2 style="font-size:16px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">🏢 Section 2 — About ENAKO: Who We Are, What We Do & How We Work</h2>
+    <p style="margin:0 0 14px;color:#475569;">
+      ENAKO is a multi-division, technology-driven financial services group headquartered in Yaoundé, Cameroon. Our overarching mission is to democratize access to modern, secure, and inclusive financial services for individuals, businesses, and communities across Africa and the diaspora. We operate across three major, distinct business divisions — each with its own purpose, client base, and product offering. As a member of the ENAKO team, you must understand all three divisions deeply, because everything we do as a company flows from this three-pillar foundation.
     </p>
-    <p style="margin:0 0 12px;color:#475569;">
-      At ENAKO, we are a lean, high-performance organization. Every team member is a critical contributor to our mission. We do not believe in bureaucracy for its own sake — we believe in results, ownership, and clarity. Each employee is expected to understand not just their role but also how their work connects to the broader company outcomes.
-    </p>
+
+    <!-- DIVISION 1: MOBILE APP -->
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:20px;margin-bottom:18px;">
+      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#1d4ed8;">📱 Division 1 — ENAKO Mobile Application (Consumer Fintech)</p>
+      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
+        The ENAKO Mobile App is our flagship consumer product — available on both iOS and Android — and serves as the financial super-app for everyday Cameroonians and the African diaspora. It brings together a powerful set of financial tools in one intuitive interface:
+      </p>
+      <ul style="margin:0;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
+        <li><strong>💰 Akawo Smart Savings:</strong> A high-yield automated savings product. Users set savings goals and ENAKO automatically deducts the chosen amount on a daily, weekly, or monthly schedule. Interest is earned on balances, making it the smartest way to save consistently without effort. This is one of our most-loved products.</li>
+        <li><strong>🤝 Njangi (Group Savings &amp; Rotating Funds):</strong> ENAKO digitizes the traditional African tontine system. Users can create or join digital Njangi groups, set rotation schedules, and manage contributions — all transparently on the app. No more missed contributions or disputes.</li>
+        <li><strong>🏗️ Land Banking &amp; Real Estate Investment:</strong> Users can invest in verified land and real estate parcels through the app, with a guaranteed annual return of <strong>12% interest per year</strong>. This makes property investment accessible to ordinary people who do not have large lump sums — they invest what they can, and the returns are calculated and credited automatically. All properties are verified, documented, and legal.</li>
+        <li><strong>🎓 School Fees Payment:</strong> Parents and guardians can pay school fees for any institution directly through the ENAKO app — no queues, no agent, no cash. The payment is processed instantly and a digital receipt is issued immediately.</li>
+        <li><strong>🏠 Rent Payment:</strong> Tenants can pay their monthly rent through the app. Landlords registered on the platform receive funds directly. This removes the friction and risk of cash-based rent transactions.</li>
+        <li><strong>💡 Utility Bill Payments (Water, Electricity &amp; More):</strong> Users can pay their CDE (electricity), CAMWATER (water), and other utility bills in seconds through the app. No more travelling to payment centers or standing in long lines. We are continuously expanding our utility payment partners.</li>
+        <li><strong>📲 Mobile Money Transfers &amp; Remittances:</strong> Send money instantly across mobile money networks (MTN MoMo, Orange Money) within Cameroon, and to the diaspora internationally. Our remittance product is fast, low-fee, and built for the African corridor.</li>
+      </ul>
+    </div>
+
+    <!-- DIVISION 2: NGO OUTREACH -->
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:20px;margin-bottom:18px;">
+      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#15803d;">🌍 Division 2 — ENAKO Outreach Foundation (NGO / Charity)</p>
+      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
+        ENAKO Outreach is our non-profit, social impact arm — a registered NGO operating under the website <a href="https://enakooutreach.cm" style="color:#15803d;font-weight:700;">enakooutreach.cm</a>. While the fintech division exists to serve individuals and businesses commercially, ENAKO Outreach exists to serve communities that have been left behind.
+      </p>
+      <ul style="margin:0;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
+        <li><strong>Charity Fundraising Campaigns:</strong> We organize and manage fundraising campaigns for individuals, communities, and causes in Cameroon and across Africa. Anyone can submit a cause and ENAKO Outreach facilitates the collection and transparent distribution of funds.</li>
+        <li><strong>Scholarship Programs:</strong> We award scholarships to brilliant but financially disadvantaged students to support their education — from primary school all the way to university level.</li>
+        <li><strong>Community Development Projects:</strong> From borehole construction to school renovation, ENAKO Outreach channels funds into verified community development projects that create lasting, measurable impact.</li>
+        <li><strong>Humanitarian Relief:</strong> In times of crisis — floods, displacement, or medical emergencies — ENAKO Outreach mobilizes resources rapidly to get aid to those who need it most.</li>
+        <li><strong>Donor Management:</strong> The Outreach platform allows donors locally and from the diaspora to give once or on a recurring basis. Every cent is tracked, reported, and accounted for with full transparency.</li>
+      </ul>
+      <p style="margin:12px 0 0;color:#475569;font-size:13px;">
+        As an ENAKO employee, you are an ambassador of this mission. We hold ourselves to the highest standards of integrity in everything we do, because our community is watching and trusting us.
+      </p>
+    </div>
+
+    <!-- DIVISION 3: FX / OTC -->
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:20px;margin-bottom:24px;">
+      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#713f12;">💱 Division 3 — ENAKO FX / OTC (International Foreign Exchange Desk)</p>
+      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
+        ENAKO FX is our over-the-counter (OTC) foreign exchange desk, serving businesses and high-value clients who need to make international payments in foreign currency. This is a B2B and corporate-facing service designed for importers, exporters, corporate entities, procurement officers, and businesses that regularly deal with international suppliers.
+      </p>
+      <p style="margin:0 0 10px;font-weight:700;color:#78350f;font-size:13px;">How It Works:</p>
+      <ul style="margin:0 0 14px;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
+        <li><strong>Who We Serve:</strong> Importers who need to pay overseas suppliers, exporters managing cross-border settlements, corporate procurement teams, and any business individual who holds CFA Francs (FCFA) in Cameroon and needs to send value abroad.</li>
+        <li><strong>The Problem We Solve:</strong> Sending money internationally from Cameroon is notoriously difficult, expensive, and slow through traditional banking channels. ENAKO FX bypasses these barriers by leveraging OTC settlement networks to deliver funds faster and at better rates.</li>
+        <li><strong>Outbound-Only (For Now):</strong> At this stage of our operations, ENAKO FX operates <strong>outbound payments only</strong> — meaning we send your money abroad in your preferred foreign currency. We do not currently receive inbound international payments. This policy may evolve as we grow our compliance and liquidity infrastructure.</li>
+        <li><strong>Currencies We Deal In:</strong> We actively trade and settle in <strong>Nigerian Naira (NGN)</strong>, <strong>USDT (Tether / Stablecoin)</strong>, <strong>US Dollar (USD)</strong>, and <strong>Euro (EUR)</strong>. Requests in other currencies are evaluated on a case-by-case basis.</li>
+        <li><strong>Client Profile:</strong> Our typical FX client is a big-ticket business operator — an importer bringing in goods from China, India, Europe, or the UAE; a corporate treasurer needing to pay international contracts; or an entrepreneur paying for software licenses, digital services, or overseas training fees.</li>
+        <li><strong>Rate &amp; Settlement Process:</strong> The client brings their FCFA, we provide a live rate quote, agree on the transaction, execute the settlement through our partner networks, and deliver confirmation once funds clear on the recipient's end. Rates are competitive and transparent.</li>
+        <li><strong>Compliance:</strong> All FX transactions are subject to KYC/AML verification. We require proper documentation of the business purpose before processing any transaction. ENAKO FX operates strictly within the regulatory framework.</li>
+      </ul>
+      <p style="margin:0;color:#475569;font-size:13px;font-style:italic;">
+        Note: If you are in a client-facing role, you will regularly interact with FX clients. Always present yourself professionally, maintain strict confidentiality about client transaction details, and escalate any unusual requests immediately to your supervisor.
+      </p>
+    </div>
+
     <p style="margin:0 0 28px;color:#475569;">
-      ENAKO Cloud OS — the platform you are now part of — is our internal operating system that manages everything from HR, payroll, task management, performance reviews, client leads, financial dashboards, compliance tracking, and team communications. It is the central nervous system of ENAKO's operations.
+      ENAKO Cloud OS — the internal platform you are now part of — is the operational backbone that ties all three divisions together. It manages HR, payroll, tasks, goals, performance reviews, client leads, financial dashboards, compliance workflows, and all internal communications. Understanding both the business and the system is essential to performing at your best here.
     </p>
 
     <!-- SECTION 3: COMPANY RULES & CODE OF CONDUCT -->
