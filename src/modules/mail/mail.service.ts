@@ -290,180 +290,169 @@ export class MailService {
     const html = `
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Helvetica Neue',Arial,sans-serif;">
-<div style="max-width:680px;margin:32px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.08);border:1px solid #e2e8f0;">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body { margin: 0; padding: 16px; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6; font-size: 16px; }
+    a { color: #1d4ed8; text-decoration: underline; word-break: break-all; }
+    .header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #1d4ed8; }
+    .header h1 { margin: 0 0 8px 0; font-size: 24px; color: #1e293b; font-weight: 800; }
+    .header p { margin: 0; font-size: 15px; color: #475569; }
+    .section { margin-bottom: 28px; }
+    .section-title { font-size: 18px; font-weight: 800; color: #1d4ed8; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.03em; }
+    .credentials-box { font-size: 16px; margin-bottom: 20px; line-height: 1.8; }
+    .cred-item { margin-bottom: 10px; }
+    .cred-label { font-weight: 700; color: #334155; }
+    .cred-val { font-weight: 800; color: #0f172a; word-break: break-all; }
+    .pwd-highlight { background-color: #fef08a; color: #854d0e; padding: 4px 10px; font-family: monospace; font-size: 18px; font-weight: 800; border-radius: 4px; display: inline-block; word-break: break-all; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; margin-bottom: 16px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-size: 15px; vertical-align: top; word-break: break-word; }
+    th { font-weight: 700; color: #475569; background-color: #f8fafc; }
+    ul, ol { margin: 0 0 16px 0; padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; }
+  </style>
+</head>
+<body>
 
   <!-- HEADER -->
-  <div style="background:linear-gradient(135deg,#1c4980 0%,#1d4ed8 60%,#0ea5e9 100%);padding:40px 32px;text-align:center;color:#fff;">
-    <div style="font-size:11px;font-weight:800;letter-spacing:0.25em;text-transform:uppercase;opacity:0.75;margin-bottom:10px;">ENAKO CLOUD OS . HUMAN RESOURCES</div>
-    <h1 style="margin:0;font-size:28px;font-weight:900;letter-spacing:0.02em;">Welcome to ENAKO, ${firstName}</h1>
-    <p style="margin:10px 0 0;font-size:14px;opacity:0.85;line-height:1.5;">Official Onboarding Documentation and Employee Guide</p>
+  <div class="header">
+    <div style="font-size:12px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">ENAKO CLOUD OS • HUMAN RESOURCES</div>
+    <h1>Welcome to ENAKO, ${firstName}!</h1>
+    <p>Official Onboarding Documentation & Employee Guide</p>
   </div>
 
-  <!-- BODY -->
-  <div style="padding:36px 32px;color:#1e293b;line-height:1.75;font-size:14px;">
+  <!-- GREETING -->
+  <p>Dear <strong>${fullName}</strong>,</p>
+  <p>
+    On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>. You were selected for your expertise, leadership potential, and alignment with our corporate mission.
+  </p>
+  <p>
+    This document serves as your official onboarding guide. It outlines your system credentials, departmental expectations, company policies, operational routines, and contact details. Please review each section carefully.
+  </p>
 
-    <!-- GREETING -->
-    <p style="font-size:15px;margin:0 0 20px;">Dear <strong>${fullName}</strong>,</p>
-    <p style="margin:0 0 16px;color:#475569;">
-      On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>. You were selected for your expertise, leadership potential, and alignment with our corporate mission.
-    </p>
-    <p style="margin:0 0 28px;color:#475569;">
-      This document serves as your official onboarding guide. It outlines your system credentials, departmental expectations, company policies, operational routines, and dashboard navigation instructions. Please review each section carefully.
-    </p>
-
-    <!-- SECTION 1: LOGIN CREDENTIALS -->
-    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:22px;margin-bottom:28px;">
-      <h2 style="margin:0 0 14px;font-size:15px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.05em;">Section 1: Your ENAKO Cloud OS Credentials</h2>
-      <p style="margin:0 0 12px;color:#475569;">Your corporate user account has been provisioned. Access your workspace using the credentials below:</p>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="border-bottom:1px solid #bae6fd;"><td style="padding:9px 8px;font-weight:700;color:#0369a1;width:160px;">Portal URL</td><td style="padding:9px 8px;"><a href="https://enakoos.com" style="color:#0369a1;font-weight:700;">https://enakoos.com</a></td></tr>
-        <tr style="border-bottom:1px solid #bae6fd;"><td style="padding:9px 8px;font-weight:700;color:#0369a1;">Corporate Email</td><td style="padding:9px 8px;font-weight:800;color:#1e293b;">${loginEmail}</td></tr>
-        <tr><td style="padding:9px 8px;font-weight:700;color:#0369a1;">Temporary Password</td><td style="padding:9px 8px;font-weight:800;color:#dc2626;font-family:monospace;font-size:15px;">${password}</td></tr>
-      </table>
-      <p style="margin:14px 0 0;font-size:12px;color:#dc2626;font-weight:700;">SECURITY NOTICE: You are required to update your temporary password immediately upon your initial login via Settings -> Security.</p>
+  <!-- SECTION 1: CREDENTIALS -->
+  <div class="section">
+    <h2 class="section-title">Section 1: Your ENAKO Cloud OS Login Credentials</h2>
+    <p>Your corporate user account has been provisioned. Access your workspace using the credentials below:</p>
+    <div class="credentials-box">
+      <div class="cred-item"><span class="cred-label">Login Portal URL:</span> <a href="https://enakoos.com" style="font-weight:800;font-size:17px;">https://enakoos.com</a></div>
+      <div class="cred-item"><span class="cred-label">Corporate Login Email:</span> <span class="cred-val">${loginEmail}</span></div>
+      <div class="cred-item"><span class="cred-label">Your Login Password:</span> <span class="pwd-highlight">${password}</span></div>
+      <div class="cred-item"><span class="cred-label">Assigned Position:</span> <span class="cred-val">${position} (${department})</span></div>
     </div>
+    <p style="color:#dc2626;font-size:14px;font-weight:700;">
+      SECURITY NOTICE: You can use the password above to log in immediately at <a href="https://enakoos.com">enakoos.com</a>. Please update your password after logging in via Settings -> Security.
+    </p>
+  </div>
 
-    <!-- SECTION 2: ABOUT ENAKO -->
-    <h2 style="font-size:15px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">Section 2: About ENAKO (Company Overview and Business Divisions)</h2>
-    <p style="margin:0 0 14px;color:#475569;">
+  <!-- SECTION 2: ABOUT ENAKO -->
+  <div class="section">
+    <h2 class="section-title">Section 2: About ENAKO (Company Overview & Divisions)</h2>
+    <p>
       ENAKO is a multi-division financial technology group headquartered in Yaoundé, Cameroon. Our corporate mission is to deliver secure, modern, and accessible financial services to individuals, businesses, and institutions across Africa and the global diaspora. We operate across three distinct business divisions:
     </p>
+    
+    <p><strong>Division 1: ENAKO Mobile Application (Consumer Fintech)</strong></p>
+    <ul>
+      <li><strong>Akawo Smart Savings:</strong> Automated high-yield savings plans with flexible schedules.</li>
+      <li><strong>Njangi Digital Savings Groups:</strong> Digitized rotating savings and credit associations managed transparently on-app.</li>
+      <li><strong>Land Banking and Real Estate:</strong> Structured real estate investment opportunities with fixed annual yields.</li>
+      <li><strong>Institutional & Utility Payments:</strong> Tuition, school fees, rent, electricity, water bill settlement, and instant Mobile Money remittances.</li>
+    </ul>
 
-    <!-- DIVISION 1: MOBILE APP -->
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:20px;margin-bottom:18px;">
-      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#1d4ed8;">Division 1: ENAKO Mobile Application (Consumer Fintech)</p>
-      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
-        Our flagship mobile platform available on iOS and Android. Key features include:
-      </p>
-      <ul style="margin:0;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
-        <li><strong>Akawo Smart Savings:</strong> Automated high-yield savings plans with flexible daily, weekly, or monthly schedules.</li>
-        <li><strong>Njangi Digital Savings Groups:</strong> Digitized rotating savings and credit associations managed transparently on-app.</li>
-        <li><strong>Land Banking and Real Estate:</strong> Structured real estate investment opportunities with fixed annual yields of 12% per annum.</li>
-        <li><strong>Institutional Payments:</strong> Automated payment processing for tuition, school fees, and residential rent.</li>
-        <li><strong>Utility Payments:</strong> Instant bill settlement for electricity, water, and essential public utilities.</li>
-        <li><strong>Remittances:</strong> High-speed local Mobile Money transfers (MTN MoMo, Orange Money) and international diaspora transfers.</li>
-      </ul>
-    </div>
+    <p><strong>Division 2: ENAKO Outreach Foundation (Social Impact and NGO)</strong></p>
+    <p>
+      Operating via <a href="https://enakooutreach.cm">enakooutreach.cm</a>, ENAKO Outreach manages non-profit humanitarian and community development initiatives including Charity Fundraising, Academic Scholarships, Infrastructure Development, and Humanitarian Relief.
+    </p>
 
-    <!-- DIVISION 2: NGO OUTREACH -->
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:20px;margin-bottom:18px;">
-      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#15803d;">Division 2: ENAKO Outreach Foundation (Social Impact and NGO)</p>
-      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
-        Operating via <a href="https://enakooutreach.cm" style="color:#15803d;font-weight:700;">enakooutreach.cm</a>, ENAKO Outreach manages non-profit humanitarian and community development initiatives:
-      </p>
-      <ul style="margin:0;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
-        <li><strong>Charity Fundraising:</strong> Public and private fundraising campaigns for community medical, social, and developmental causes.</li>
-        <li><strong>Academic Scholarships:</strong> Merit and need-based financial awards for underprivileged primary, secondary, and university students.</li>
-        <li><strong>Infrastructure Development:</strong> Clean water boreholes, school renovations, and civic development projects.</li>
-        <li><strong>Humanitarian Relief:</strong> Rapid emergency response and resource deployment during natural or social crises.</li>
-      </ul>
-    </div>
+    <p><strong>Division 3: ENAKO FX / OTC (Foreign Exchange Desk)</strong></p>
+    <p>
+      Institutional Over-The-Counter (OTC) Foreign Exchange desk catering to commercial importers, exporters, and corporate entities requiring outbound international currency settlements (USD, EUR, NGN, USDT).
+    </p>
+  </div>
 
-    <!-- DIVISION 3: FX / OTC -->
-    <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:20px;margin-bottom:24px;">
-      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#713f12;">Division 3: ENAKO FX / OTC (Foreign Exchange Desk)</p>
-      <p style="margin:0 0 12px;color:#475569;font-size:13px;">
-        Our institutional Over-The-Counter (OTC) Foreign Exchange desk catering to commercial importers, exporters, and corporate entities requiring outbound international settlements.
-      </p>
-      <ul style="margin:0 0 14px;padding-left:20px;color:#475569;line-height:2.1;font-size:13px;">
-        <li><strong>Outbound Settlements:</strong> Foreign currency payments for international supplier invoices and contracts.</li>
-        <li><strong>Traded Currencies:</strong> US Dollar (USD), Euro (EUR), Nigerian Naira (NGN), and USDT (Tether).</li>
-        <li><strong>Compliance:</strong> Strict KYC and anti-money laundering (AML) protocols applied to all institutional transactions.</li>
-      </ul>
-    </div>
-
-    <!-- SECTION 3: COMPANY RULES -->
-    <h2 style="font-size:15px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">Section 3: Corporate Standards and Code of Conduct</h2>
-    <ul style="margin:0 0 16px;padding-left:20px;color:#475569;line-height:2;">
+  <!-- SECTION 3: CORPORATE STANDARDS -->
+  <div class="section">
+    <h2 class="section-title">Section 3: Corporate Standards & Code of Conduct</h2>
+    <ul>
       <li><strong>Punctuality:</strong> Logged into ENAKO Cloud OS by your scheduled shift start time.</li>
       <li><strong>Confidentiality:</strong> Strict non-disclosure regarding proprietary financial data, code, client lists, and operational metrics.</li>
       <li><strong>Professional Integrity:</strong> High ethical conduct required in all internal and client-facing interactions.</li>
       <li><strong>Information Security:</strong> Always lock or sign out of your workstation when stepping away.</li>
     </ul>
+  </div>
 
-    <!-- SECTION 4: DEPARTMENT EXPECTATIONS -->
-    <h2 style="font-size:15px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">Section 4: Department Expectations for ${department}</h2>
-    <p style="margin:0 0 12px;color:#475569;">
+  <!-- SECTION 4: DEPARTMENT EXPECTATIONS -->
+  <div class="section">
+    <h2 class="section-title">Section 4: Department Expectations for ${department}</h2>
+    <p>
       As a <strong>${position}</strong> in the <strong>${department} Department</strong>, you are responsible for executing departmental objectives and maintaining high standards of deliverable quality.
     </p>
 
     ${responsibilities ? `
-    <div style="background:#f8fafc;border-left:4px solid #1c4980;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0 0 6px;font-size:13px;color:#1c4980;font-weight:700;">Assigned Core Responsibilities:</p>
-      <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">${responsibilities}</p>
-    </div>` : ''}
+    <p><strong>Your Core Responsibilities & Duties:</strong></p>
+    <div style="white-space:pre-wrap;margin-bottom:16px;line-height:1.7;">${responsibilities}</div>
+    ` : ''}
 
     ${goals ? `
-    <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px;border-radius:6px;margin:16px 0 24px;">
-      <p style="margin:0 0 6px;font-size:13px;color:#15803d;font-weight:700;">Initial Performance Goals:</p>
-      <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">${goals}</p>
-    </div>` : ''}
+    <p><strong>Your Initial Performance Goals:</strong></p>
+    <div style="white-space:pre-wrap;margin-bottom:16px;line-height:1.7;">${goals}</div>
+    ` : ''}
+  </div>
 
-    <!-- SECTION 5: WEEKLY REPORTS -->
-    <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:22px;margin-bottom:28px;">
-      <h2 style="margin:0 0 12px;font-size:15px;font-weight:800;color:#713f12;text-transform:uppercase;letter-spacing:0.05em;">Section 5: Weekly Activity Reports</h2>
-      <p style="margin:0 0 12px;color:#475569;">
-        All staff must submit a Weekly Activity Report (WAR) via ENAKO OS every <strong>Friday before 5:00 PM</strong>.
-      </p>
-      <ol style="margin:0 0 14px;padding-left:20px;color:#475569;line-height:2;">
-        <li>Tasks Completed This Week (with task IDs referenced)</li>
-        <li>Tasks In Progress and Expected Delivery Dates</li>
-        <li>Operational Blockers and Remediation Requests</li>
-        <li>Key Commitments for Upcoming Week</li>
-      </ol>
-    </div>
+  <!-- SECTION 5: WEEKLY REPORTS -->
+  <div class="section">
+    <h2 class="section-title">Section 5: Weekly Activity Reports</h2>
+    <p>
+      All staff must submit a Weekly Activity Report (WAR) via ENAKO OS every <strong>Friday before 5:00 PM</strong> detailing:
+    </p>
+    <ol>
+      <li>Tasks Completed This Week (with task IDs referenced)</li>
+      <li>Tasks In Progress and Expected Delivery Dates</li>
+      <li>Operational Blockers and Remediation Requests</li>
+      <li>Key Commitments for Upcoming Week</li>
+    </ol>
+  </div>
 
-    <!-- SECTION 6: STAFF MEALS -->
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:22px;margin-bottom:28px;">
-      <h2 style="margin:0 0 12px;font-size:15px;font-weight:800;color:#14532d;text-transform:uppercase;letter-spacing:0.05em;">Section 6: Staff Meal Subsidy Policy</h2>
-      <p style="margin:0 0 12px;color:#475569;">
-        ENAKO provides a standard daily meal allowance of <strong>1,000 FCFA</strong> on active working days.
-      </p>
-      <ul style="margin:0 0 14px;padding-left:20px;color:#166534;line-height:2;font-size:13px;">
-        <li>Company Subsidy: 50% (500 FCFA per working day).</li>
-        <li>Employee Contribution: 50% (500 FCFA per working day).</li>
-        <li>Daily Logging Requirement: Log your daily meal under "Staff Meals" in ENAKO OS by end of shift.</li>
-      </ul>
-    </div>
+  <!-- SECTION 6: STAFF MEALS -->
+  <div class="section">
+    <h2 class="section-title">Section 6: Staff Meal Subsidy Policy</h2>
+    <p>
+      ENAKO provides a standard daily meal allowance of <strong>1,000 FCFA</strong> on active working days (50% company subsidy of 500 FCFA / 50% employee contribution of 500 FCFA). Log daily meals under "Staff Meals" in ENAKO OS by end of shift.
+    </p>
+  </div>
 
-    <!-- SECTION 7: CONTACTS -->
-    <h2 style="font-size:15px;font-weight:800;color:#1c4980;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">Section 7: Key Departmental Contacts</h2>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
-      <thead><tr style="background:#f8fafc;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">
-        <th style="padding:9px 10px;text-align:left;">Department</th>
-        <th style="padding:9px 10px;text-align:left;">Scope</th>
-        <th style="padding:9px 10px;text-align:left;">Email</th>
-      </tr></thead>
+  <!-- SECTION 7: SUPPORT & CONTACTS -->
+  <div class="section">
+    <h2 class="section-title">Section 7: Management & Support Contact</h2>
+    <p>For all HR inquiries, technical assistance, onboarding support, and executive escalations, please contact Management directly:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Department / Scope</th>
+          <th>Support Email</th>
+        </tr>
+      </thead>
       <tbody>
-        <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:9px 10px;font-weight:600;">Human Resources</td><td style="padding:9px 10px;color:#64748b;">Onboarding, Leave, Policy</td><td style="padding:9px 10px;"><a href="mailto:hr@enako.cm" style="color:#2563eb;">hr@enako.cm</a></td></tr>
-        <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:9px 10px;font-weight:600;">IT &amp; Systems</td><td style="padding:9px 10px;color:#64748b;">Accounts, Security, Technical</td><td style="padding:9px 10px;"><a href="mailto:it@enako.cm" style="color:#2563eb;">it@enako.cm</a></td></tr>
-        <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:9px 10px;font-weight:600;">Finance</td><td style="padding:9px 10px;color:#64748b;">Payroll, Expenses, Meals</td><td style="padding:9px 10px;"><a href="mailto:finance@enako.cm" style="color:#2563eb;">finance@enako.cm</a></td></tr>
-        <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:9px 10px;font-weight:600;">Executive Office</td><td style="padding:9px 10px;color:#64748b;">Escalations &amp; Operations</td><td style="padding:9px 10px;"><a href="mailto:ceo@enako.cm" style="color:#2563eb;">ceo@enako.cm</a></td></tr>
+        <tr>
+          <td>Management & Support (HR, IT, Operations, Executive)</td>
+          <td><a href="mailto:enakomgt@gmail.com" style="font-weight:700;font-size:16px;">enakomgt@gmail.com</a></td>
+        </tr>
       </tbody>
     </table>
-
-    <!-- CLOSING -->
-    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:22px;margin-bottom:8px;">
-      <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#1c4980;">Welcome aboard, ${firstName}.</p>
-      <p style="margin:0;color:#475569;font-size:13px;line-height:1.7;">
-        We look forward to your contributions toward ENAKO's growth and operational success.
-      </p>
-    </div>
-
-    <p style="margin:24px 0 0;color:#64748b;font-size:13px;">Regards,</p>
-    <p style="margin:4px 0 0;font-size:14px;font-weight:800;color:#1c4980;">ENAKO Executive Management &amp; Human Resources</p>
-    <p style="margin:2px 0 0;font-size:12px;color:#94a3b8;">ENAKO Cloud OS . Yaoundé, Cameroon . <a href="mailto:hr@enako.cm" style="color:#2563eb;text-decoration:none;">hr@enako.cm</a></p>
-
   </div>
 
-  <!-- FOOTER -->
-  <div style="background:#1e293b;padding:18px 24px;text-align:center;font-size:11px;color:#64748b;letter-spacing:0.03em;">
-    © ${new Date().getFullYear()} ENAKO Cloud OS . Confidential . Prepared for ${fullName}<br/>
-    <a href="https://enakoos.com" style="color:#0ea5e9;text-decoration:none;margin-top:4px;display:inline-block;">https://enakoos.com</a>
+  <!-- CLOSING & FOOTER -->
+  <div class="footer">
+    <p style="font-size:16px;font-weight:700;color:#1e293b;margin:0 0 8px 0;">Welcome aboard, ${firstName}.</p>
+    <p style="margin:0 0 16px 0;">We look forward to your contributions toward ENAKO's growth and operational success.</p>
+    <p style="margin:0;"><strong>ENAKO Executive Management & Human Resources</strong></p>
+    <p style="margin:4px 0 0 0;">ENAKO Cloud OS • Yaoundé, Cameroon • <a href="mailto:enakomgt@gmail.com">enakomgt@gmail.com</a></p>
+    <p style="margin:16px 0 0 0;font-size:12px;">© ${new Date().getFullYear()} ENAKO Cloud OS • Confidential • Prepared for ${fullName} • <a href="https://enakoos.com">https://enakoos.com</a></p>
   </div>
-</div>
+
 </body>
 </html>
     `;
@@ -475,3 +464,4 @@ export class MailService {
     );
   }
 }
+
