@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { MealStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
@@ -24,24 +24,44 @@ export class MealsService {
     return { items, totals };
   }
 
-  record(dto: MealDto) {
+  async record(dto: MealDto) {
     const totalAmount = 1000; // Fixed daily delivery price (1,000 FCFA)
     const companyAmount = 500; // 50% paid by company
     const employeeAmount = 500; // 50% paid by employee
 
-    return this.prisma.mealRecord.upsert({
-      where: { employeeId_date: { employeeId: dto.employeeId, date: new Date(dto.date) } },
-      update: { 
-        status: dto.status as MealStatus,
-        mealName: dto.mealName,
-        mealTime: dto.mealTime,
-        totalAmount,
-        companyAmount,
-        employeeAmount,
-      },
-      create: {
+    const targetDate = new Date(dto.date);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const existing = await this.prisma.mealRecord.findFirst({
+      where: {
         employeeId: dto.employeeId,
-        date: new Date(dto.date),
+        date: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+      include: { employee: { select: { fullName: true } } },
+    });
+
+    if (existing) {
+      const empName = existing.employee?.fullName || 'this employee';
+      const formattedDate = targetDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      throw new ConflictException(
+        `Food entry for ${empName} has already been recorded for ${formattedDate}.`
+      );
+    }
+
+    return this.prisma.mealRecord.create({
+      data: {
+        employeeId: dto.employeeId,
+        date: targetDate,
         status: dto.status as MealStatus,
         mealName: dto.mealName,
         mealTime: dto.mealTime,
