@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { createClient } from '@supabase/supabase-js';
-import { OutreachApplicationType, ApplicationStatus } from '@prisma/client';
+import { OutreachApplicationType, ApplicationStatus, OutreachEventStatus } from '@prisma/client';
 import { MtnService } from './mtn.service';
 import { PixiPayService } from './pixipay.service';
 
