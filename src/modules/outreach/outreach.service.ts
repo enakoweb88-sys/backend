@@ -422,6 +422,14 @@ export class OutreachService {
     });
   }
 
+  private mapEventStatus(rawStatus?: string): OutreachEventStatus {
+    if (!rawStatus) return OutreachEventStatus.OPEN;
+    const s = String(rawStatus).toUpperCase();
+    if (s === 'DRAFT') return OutreachEventStatus.DRAFT;
+    if (s === 'CLOSED' || s === 'COMPLETED') return OutreachEventStatus.CLOSED;
+    return OutreachEventStatus.OPEN;
+  }
+
   async createEvent(data: any) {
     let storyMediaUrl = data.storyMediaUrl || null;
     if (data.storyMediaBase64) {
@@ -447,6 +455,8 @@ export class OutreachService {
       }
     }
 
+    const status = this.mapEventStatus(data.status);
+
     return this.prisma.outreachEvent.create({
       data: {
         title: data.title,
@@ -454,7 +464,7 @@ export class OutreachService {
         description: data.description,
         descriptionFr: data.descriptionFr,
         type: data.type || 'SCHOLARSHIP',
-        status: data.status || 'DRAFT',
+        status,
         openDate: data.openDate ? new Date(data.openDate) : null,
         closeDate: data.closeDate ? new Date(data.closeDate) : null,
         targetSchools: data.targetSchools || [],
@@ -472,9 +482,10 @@ export class OutreachService {
   }
 
   async updateEventStatus(id: string, status: any) {
+    const validStatus = this.mapEventStatus(status);
     return this.prisma.outreachEvent.update({
       where: { id },
-      data: { status }
+      data: { status: validStatus }
     });
   }
 
