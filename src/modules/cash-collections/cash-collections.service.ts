@@ -8,7 +8,7 @@ import { CashCollectionStatus, Prisma } from '@prisma/client';
 export class CashCollectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(query: QueryDto & { status?: string; collectorId?: string }, user: JwtUser) {
+  async list(query: QueryDto & { status?: string; collectorId?: string }, user?: JwtUser) {
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 25);
     const skip = (page - 1) * limit;
