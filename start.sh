@@ -1,5 +1,10 @@
 #!/bin/sh
-echo "Syncing database schema..."
-npx prisma db push --accept-data-loss
-echo "Starting server..."
+
+if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations)" ]; then
+  echo "Running Prisma migrations..."
+  npx prisma migrate deploy
+else
+  echo "No migrations found, skipping migration step"
+fi
+
 node dist/main.js

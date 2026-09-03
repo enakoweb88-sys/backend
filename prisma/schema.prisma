@@ -66,6 +66,7 @@ model User {
   dailyReports         DailyReport[]
   documents            Document[]
   expenses             Expense[]
+  cashCollections      CashCollection[]
   goals                Goal[]                @relation("PersonalGoals")
   approvedKyc          KycSubmission[]       @relation("ApprovedKyc")
   reviewedKyc          KycSubmission[]       @relation("ReviewedKyc")
@@ -1035,3 +1036,32 @@ enum OutreachApplicationType {
   SCHOOL_REGISTRATION
   GENERAL
 }
+
+enum CashCollectionStatus {
+  COMPLETE
+  PENDING
+  CANCELLED
+}
+
+model CashCollection {
+  id                 String               @id @default(cuid())
+  collectorId        String
+  clientName         String
+  location           String
+  amountCollected    Decimal              @db.Decimal(14, 2)
+  outstandingBalance Decimal              @default(0) @db.Decimal(14, 2)
+  currency           String               @default("XAF")
+  collectionTime     DateTime             @default(now())
+  status             CashCollectionStatus @default(PENDING)
+  description        String               @db.Text
+  receiptUrl         String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  collector          User                 @relation(fields: [collectorId], references: [id])
+
+  @@index([collectorId])
+  @@index([status])
+  @@index([collectionTime])
+  @@map("cash_collections")
+}
+

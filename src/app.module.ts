@@ -10,6 +10,7 @@ import { CommunicationsModule } from './modules/communications/communications.mo
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { CashCollectionsModule } from './modules/cash-collections/cash-collections.module';
 import { FilesModule } from './modules/files/files.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { KycModule } from './modules/kyc/kyc.module';
@@ -52,6 +53,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     // Financial Operations
     TransactionsModule,
     ExpensesModule,
+    CashCollectionsModule,
     // Compliance
     KycModule,
     // Operations

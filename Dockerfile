@@ -8,17 +8,16 @@ RUN npm install
 
 COPY . .
 
-# Generate Prisma client in builder stage
-RUN DATABASE_URL="postgresql://user:password@localhost:5432/db" \
-    DIRECT_URL="postgresql://user:password@localhost:5432/db" \
-    npx prisma generate
+# Create a temporary .env for build time (Prisma generation only)
+RUN echo "DATABASE_URL=postgresql://user:password@localhost:5432/db" > .env && \
+    echo "DIRECT_URL=postgresql://user:password@localhost:5432/db" >> .env && \
+    npx prisma generate && \
+    rm .env
 
-# Compile TypeScript
-RUN npx tsc -p tsconfig.build.json
+RUN npm run build
 
-RUN ls -la /app/dist/main.js && echo "BUILD SUCCESS"
+RUN ls -la /app/dist && echo "BUILD SUCCESS" || (echo "BUILD FAILED - dist is empty" && exit 1)
 
-# ── Final image ──────────────────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
 
@@ -28,17 +27,14 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY prisma ./prisma
-
-RUN DATABASE_URL="postgresql://user:password@localhost:5432/db" \
-    DIRECT_URL="postgresql://user:password@localhost:5432/db" \
-    npx prisma generate
+RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
-RUN ls -la /app/dist/main.js && echo "COPY SUCCESS"
+RUN ls -la /app/dist && echo "COPY SUCCESS" || (echo "COPY FAILED - dist missing in final stage" && exit 1)
 
-COPY start.sh ./start.sh
-RUN chmod +x ./start.sh
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-EXPOSE 5000
-CMD ["./start.sh"]
+EXPOSE 3000
+CMD ["/app/start.sh"]

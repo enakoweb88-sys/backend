@@ -602,3 +602,45 @@ export class UpdateSubscriptionDto {
   @IsOptional()
   receiptUrl?: string;
 }
+
+export class CreateCashCollectionDto {
+  @IsString()
+  clientName!: string;
+
+  @IsString()
+  location!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  amountCollected!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  outstandingBalance?: number;
+
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
+  @IsDateString()
+  @IsOptional()
+  collectionTime?: string;
+
+  @IsString()
+  @IsOptional()
+  status?: 'COMPLETE' | 'PENDING' | 'CANCELLED';
+
+  @IsString()
+  description!: string;
+
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string;
+}
+
+export class UpdateCashCollectionStatusDto {
+  @IsString()
+  status!: 'COMPLETE' | 'PENDING' | 'CANCELLED';
+}
+
