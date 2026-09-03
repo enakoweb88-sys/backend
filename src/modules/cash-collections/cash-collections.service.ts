@@ -9,57 +9,68 @@ export class CashCollectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: QueryDto & { status?: string; collectorId?: string }, user?: JwtUser) {
-    const page = Number(query.page || 1);
-    const limit = Number(query.limit || 25);
-    const skip = (page - 1) * limit;
+    try {
+      const page = Number(query.page || 1);
+      const limit = Number(query.limit || 25);
+      const skip = (page - 1) * limit;
 
-    const where: Prisma.CashCollectionWhereInput = {};
+      const where: Prisma.CashCollectionWhereInput = {};
 
-    if (query.search) {
-      where.OR = [
-        { clientName: { contains: query.search, mode: 'insensitive' } },
-        { location: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
-        { collector: { fullName: { contains: query.search, mode: 'insensitive' } } },
-      ];
-    }
+      if (query.search) {
+        where.OR = [
+          { clientName: { contains: query.search, mode: 'insensitive' } },
+          { location: { contains: query.search, mode: 'insensitive' } },
+          { description: { contains: query.search, mode: 'insensitive' } },
+          { collector: { fullName: { contains: query.search, mode: 'insensitive' } } },
+        ];
+      }
 
-    if (query.status && ['COMPLETE', 'PENDING', 'CANCELLED'].includes(query.status.toUpperCase())) {
-      where.status = query.status.toUpperCase() as CashCollectionStatus;
-    }
+      if (query.status && ['COMPLETE', 'PENDING', 'CANCELLED'].includes(query.status.toUpperCase())) {
+        where.status = query.status.toUpperCase() as CashCollectionStatus;
+      }
 
-    if (query.collectorId) {
-      where.collectorId = query.collectorId;
-    }
+      if (query.collectorId) {
+        where.collectorId = query.collectorId;
+      }
 
-    const [items, total] = await Promise.all([
-      this.prisma.cashCollection.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { collectionTime: 'desc' },
-        include: {
-          collector: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              avatarUrl: true,
-              role: { select: { name: true } },
+      const [items, total] = await Promise.all([
+        this.prisma.cashCollection.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { collectionTime: 'desc' },
+          include: {
+            collector: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                avatarUrl: true,
+                role: { select: { name: true } },
+              },
             },
           },
-        },
-      }),
-      this.prisma.cashCollection.count({ where }),
-    ]);
+        }),
+        this.prisma.cashCollection.count({ where }),
+      ]);
 
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+      return {
+        items,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (err) {
+      console.error('Error fetching cash collections:', err);
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 25,
+        totalPages: 0,
+      };
+    }
   }
 
   async findOne(id: string) {
@@ -159,42 +170,55 @@ export class CashCollectionsService {
   }
 
   async getStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const [todayAgg, pendingAgg, totalAgg, recentCount] = await Promise.all([
-      this.prisma.cashCollection.aggregate({
-        _sum: { amountCollected: true },
-        _count: true,
-        where: {
-          collectionTime: { gte: today },
-          status: CashCollectionStatus.COMPLETE,
-        },
-      }),
-      this.prisma.cashCollection.aggregate({
-        _sum: { amountCollected: true },
-        _count: true,
-        where: {
-          status: CashCollectionStatus.PENDING,
-        },
-      }),
-      this.prisma.cashCollection.aggregate({
-        _sum: { amountCollected: true, outstandingBalance: true },
-        _count: true,
-      }),
-      this.prisma.cashCollection.count({
-        where: { collectionTime: { gte: today } },
-      }),
-    ]);
+      const [todayAgg, pendingAgg, totalAgg, recentCount] = await Promise.all([
+        this.prisma.cashCollection.aggregate({
+          _sum: { amountCollected: true },
+          _count: true,
+          where: {
+            collectionTime: { gte: today },
+            status: CashCollectionStatus.COMPLETE,
+          },
+        }),
+        this.prisma.cashCollection.aggregate({
+          _sum: { amountCollected: true },
+          _count: true,
+          where: {
+            status: CashCollectionStatus.PENDING,
+          },
+        }),
+        this.prisma.cashCollection.aggregate({
+          _sum: { amountCollected: true, outstandingBalance: true },
+          _count: true,
+        }),
+        this.prisma.cashCollection.count({
+          where: { collectionTime: { gte: today } },
+        }),
+      ]);
 
-    return {
-      todayCollected: todayAgg._sum.amountCollected || 0,
-      todayCount: todayAgg._count || 0,
-      pendingAmount: pendingAgg._sum.amountCollected || 0,
-      pendingCount: pendingAgg._count || 0,
-      totalCollected: totalAgg._sum.amountCollected || 0,
-      totalOutstanding: totalAgg._sum.outstandingBalance || 0,
-      totalRecords: totalAgg._count || 0,
-    };
+      return {
+        todayCollected: todayAgg._sum.amountCollected || 0,
+        todayCount: todayAgg._count || 0,
+        pendingAmount: pendingAgg._sum.amountCollected || 0,
+        pendingCount: pendingAgg._count || 0,
+        totalCollected: totalAgg._sum.amountCollected || 0,
+        totalOutstanding: totalAgg._sum.outstandingBalance || 0,
+        totalRecords: totalAgg._count || 0,
+      };
+    } catch (err) {
+      console.error('Error getting cash collection stats:', err);
+      return {
+        todayCollected: 0,
+        todayCount: 0,
+        pendingAmount: 0,
+        pendingCount: 0,
+        totalCollected: 0,
+        totalOutstanding: 0,
+        totalRecords: 0,
+      };
+    }
   }
 }
