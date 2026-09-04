@@ -852,6 +852,20 @@ model FloatAccount {
   @@map("float_accounts")
 }
 
+model ExchangeRate {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  flag        String   @default("")
+  buyingRate  String   @default("")
+  sellingRate String   @default("")
+  change24h   Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("exchange_rates")
+}
+
 model Investment {
   id        String   @id @default(cuid())
   title     String

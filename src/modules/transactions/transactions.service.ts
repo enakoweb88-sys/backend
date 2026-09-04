@@ -237,4 +237,42 @@ export class TransactionsService {
       update: { balance }
     });
   }
+
+  async getExchangeRates() {
+    try {
+      return await this.prisma.exchangeRate.findMany({
+        orderBy: { code: 'asc' },
+      });
+    } catch (e) {
+      console.error('Error fetching exchange rates from database:', e);
+      return [];
+    }
+  }
+
+  async saveExchangeRates(dto: { rates: Array<{ code: string; name: string; flag?: string; buyingRate?: string; sellingRate?: string; change24h?: number }> }) {
+    const list = dto.rates || [];
+    const results = [];
+    for (const r of list) {
+      const saved = await this.prisma.exchangeRate.upsert({
+        where: { code: r.code },
+        create: {
+          code: r.code,
+          name: r.name || r.code,
+          flag: r.flag || '',
+          buyingRate: r.buyingRate || '',
+          sellingRate: r.sellingRate || '',
+          change24h: r.change24h ?? 0,
+        },
+        update: {
+          buyingRate: r.buyingRate !== undefined ? r.buyingRate : undefined,
+          sellingRate: r.sellingRate !== undefined ? r.sellingRate : undefined,
+          change24h: r.change24h !== undefined ? r.change24h : undefined,
+          flag: r.flag || undefined,
+          name: r.name || undefined,
+        },
+      });
+      results.push(saved);
+    }
+    return results;
+  }
 }

@@ -45,4 +45,16 @@ export class TransactionsController {
   setFloatBalance(@Body('channel') channel: string, @Body('balance') balance: number) {
     return this.transactions.setFloatBalance(channel, balance);
   }
+
+  @Get('exchange-rates')
+  @Roles('CEO', 'MANAGER')
+  getExchangeRates() {
+    return this.transactions.getExchangeRates();
+  }
+
+  @Post('exchange-rates')
+  @Roles('CEO', 'MANAGER')
+  saveExchangeRates(@Body() body: any) {
+    return this.transactions.saveExchangeRates(body);
+  }
 }
