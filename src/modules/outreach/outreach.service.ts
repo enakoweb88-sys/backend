@@ -426,6 +426,7 @@ export class OutreachService {
     if (!rawStatus) return OutreachEventStatus.OPEN;
     const s = String(rawStatus).toUpperCase();
     if (s === 'DRAFT') return OutreachEventStatus.DRAFT;
+    if (s === 'SCHEDULED') return OutreachEventStatus.SCHEDULED;
     if (s === 'CLOSED' || s === 'COMPLETED') return OutreachEventStatus.CLOSED;
     return OutreachEventStatus.OPEN;
   }

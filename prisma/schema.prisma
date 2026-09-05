@@ -1026,6 +1026,7 @@ enum OutreachEventType {
 enum OutreachEventStatus {
   DRAFT
   OPEN
+  SCHEDULED
   CLOSED
 }
 

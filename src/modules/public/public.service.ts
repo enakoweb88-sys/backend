@@ -29,7 +29,7 @@ export class PublicService {
     return this.prisma.outreachEvent.findMany({
       where: {
         type: 'SCHOLARSHIP',
-        status: 'OPEN'
+        status: { in: ['OPEN', 'SCHEDULED'] }
       },
       orderBy: {
         createdAt: 'desc'
