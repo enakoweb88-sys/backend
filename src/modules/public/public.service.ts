@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutreachEventStatus } from '@prisma/client';
 
 @Injectable()
 export class PublicService {
@@ -29,7 +30,7 @@ export class PublicService {
     return this.prisma.outreachEvent.findMany({
       where: {
         type: 'SCHOLARSHIP',
-        status: { in: ['OPEN', 'SCHEDULED', 'ACTIVE', 'PUBLISHED'] }
+        status: { in: [OutreachEventStatus.OPEN, OutreachEventStatus.SCHEDULED] }
       },
       orderBy: {
         createdAt: 'desc'
