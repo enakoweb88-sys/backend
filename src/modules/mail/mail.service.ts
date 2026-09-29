@@ -336,6 +336,12 @@ export class MailService {
    * Sent to new team members with their initial onboarding documentation & credentials.
    * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
    */
+  /**
+   * Sent to new team members with their initial onboarding documentation & credentials.
+   * Full comprehensive onboarding packet including company overview, code of conduct,
+   * weekly reporting protocol, meal subsidies, credentials, and custom manager inputs.
+   * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
   async sendWelcomeEmail(opts: {
     toEmail: string;
     fullName: string;
@@ -350,6 +356,93 @@ export class MailService {
     const firstName = fullName.split(' ')[0];
     const refCode = Math.floor(1000 + Math.random() * 9000);
 
+    const messageHtml = `
+      <p>On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>. You were selected for your expertise, leadership potential, and alignment with our corporate mission.</p>
+      
+      <p>This document serves as your official onboarding guide. It outlines your system credentials, departmental expectations, company policies, operational routines, and contact details. Please review each section carefully.</p>
+
+      <!-- SECTION 1: CREDENTIALS -->
+      <div style="margin-top: 28px;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 1: Access Credentials</div>
+        <p style="margin: 0 0 12px 0;">Your corporate user account has been provisioned. Access your workspace using the credentials below:</p>
+      </div>
+
+      <!-- SECTION 2: COMPANY OVERVIEW -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 2: About ENAKO (Company Overview &amp; Divisions)</div>
+        <p>ENAKO is a multi-division financial technology group headquartered in Yaoundé, Cameroon. Our corporate mission is to deliver secure, modern, and accessible financial services to individuals, businesses, and institutions across Africa and the global diaspora. We operate across three distinct business divisions:</p>
+        
+        <p style="margin-bottom: 6px;"><strong>Division 1: ENAKO Mobile Application (Consumer Fintech)</strong></p>
+        <ul style="margin: 0 0 12px 0; padding-left: 20px;">
+          <li><strong>Akawo Smart Savings:</strong> Automated high-yield savings plans with flexible schedules.</li>
+          <li><strong>Njangi Digital Savings Groups:</strong> Digitized rotating savings and credit associations managed transparently on-app.</li>
+          <li><strong>Land Banking and Real Estate:</strong> Structured real estate investment opportunities with fixed annual yields.</li>
+          <li><strong>Institutional &amp; Utility Payments:</strong> Tuition, school fees, rent, utility bill settlements, and instant Mobile Money remittances.</li>
+        </ul>
+
+        <p style="margin-bottom: 6px;"><strong>Division 2: ENAKO Outreach Foundation (Social Impact and NGO)</strong></p>
+        <p style="margin-top: 0;">Operating via <a href="https://enakooutreach.cm" style="color: #00adb2; font-weight: 600; text-decoration: none;">enakooutreach.cm</a>, ENAKO Outreach manages non-profit humanitarian and community development initiatives including Charity Fundraising, Academic Scholarships, Infrastructure Development, and Emergency Relief.</p>
+
+        <p style="margin-bottom: 6px;"><strong>Division 3: ENAKO FX / OTC (Foreign Exchange Desk)</strong></p>
+        <p style="margin-top: 0;">Institutional Over-The-Counter (OTC) Foreign Exchange desk catering to commercial importers, exporters, and corporate entities requiring outbound international currency settlements (USD, EUR, NGN, USDT).</p>
+      </div>
+
+      <!-- SECTION 3: CODE OF CONDUCT -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 3: Corporate Standards &amp; Code of Conduct</div>
+        <ul style="margin: 0 0 16px 0; padding-left: 20px;">
+          <li><strong>Punctuality:</strong> Logged into ENAKO Cloud OS by your scheduled shift start time.</li>
+          <li><strong>Confidentiality:</strong> Strict non-disclosure regarding proprietary financial data, internal code, client lists, and operational metrics.</li>
+          <li><strong>Professional Integrity:</strong> High ethical conduct required in all internal and client-facing interactions.</li>
+          <li><strong>Information Security:</strong> Always lock or sign out of your workstation when stepping away.</li>
+        </ul>
+      </div>
+
+      <!-- SECTION 4: DEPARTMENT EXPECTATIONS -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 4: Department Expectations for ${department}</div>
+        <p>As a <strong>${position}</strong> in the <strong>${department} Department</strong>, you are responsible for executing departmental objectives and maintaining high standards of deliverable quality.</p>
+
+        ${responsibilities ? `
+        <div style="margin: 16px 0;">
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Your Core Responsibilities &amp; Duties:</div>
+          <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: #475569; background: #fafafa; padding: 14px 16px; border-radius: 6px;">${responsibilities}</div>
+        </div>
+        ` : ''}
+
+        ${goals ? `
+        <div style="margin: 16px 0;">
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Your Initial Performance Goals:</div>
+          <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: #475569; background: #fafafa; padding: 14px 16px; border-radius: 6px;">${goals}</div>
+        </div>
+        ` : ''}
+      </div>
+
+      <!-- SECTION 5: WEEKLY ACTIVITY REPORTS -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 5: Weekly Activity Reports (WAR)</div>
+        <p>All staff must submit a Weekly Activity Report via ENAKO OS every <strong>Friday before 5:00 PM</strong> detailing:</p>
+        <ol style="margin: 0 0 16px 0; padding-left: 20px;">
+          <li>Tasks Completed This Week (with task IDs referenced)</li>
+          <li>Tasks In Progress and Expected Delivery Dates</li>
+          <li>Operational Blockers and Remediation Requests</li>
+          <li>Key Commitments for Upcoming Week</li>
+        </ol>
+      </div>
+
+      <!-- SECTION 6: STAFF MEAL SUBSIDY -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 6: Staff Meal Subsidy Policy</div>
+        <p>ENAKO provides a standard daily meal allowance of <strong>1,000 FCFA</strong> on active working days (50% company subsidy of 500 FCFA / 50% employee contribution of 500 FCFA). Log daily meals under "Staff Meals" in ENAKO OS by the end of your shift.</p>
+      </div>
+
+      <!-- SECTION 7: MANAGEMENT & SUPPORT -->
+      <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+        <div style="font-size: 13px; font-weight: 800; color: #00adb2; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;">Section 7: Management &amp; Support Contact</div>
+        <p>For all HR inquiries, technical assistance, onboarding support, and executive escalations, please contact Management directly at <a href="mailto:support@enakoos.com" style="color: #00adb2; font-weight: 700; text-decoration: none;">support@enakoos.com</a>.</p>
+      </div>
+    `;
+
     const html = buildBrandedEmail({
       badge: 'ONBOARDING',
       badgeColor: '#00c2c7',
@@ -357,15 +450,12 @@ export class MailService {
       headerSubtitle: 'Human Resources & Talent Management',
       recipientName: fullName,
       headline: `Welcome to ENAKO, ${firstName}!`,
-      messageHtml: `
-        <p>On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>.</p>
-        <p>Your official corporate access credentials for ENAKO Cloud OS have been provisioned.</p>
-      `,
+      messageHtml,
       keyDetails: [
         { label: 'Login Portal', value: '<a href="https://enakoos.com" style="color: #00adb2; font-weight: 700; text-decoration: none;">https://enakoos.com</a>' },
         { label: 'Corporate Email', value: loginEmail, isHighlight: true },
         { label: 'Initial Password', value: `<span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0f172a; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">${password}</span>` },
-        { label: 'Role & Dept', value: `${position} (${department})` },
+        { label: 'Position & Dept', value: `${position} (${department})` },
       ],
       calloutNote: {
         title: 'Security Notice',
@@ -376,12 +466,12 @@ export class MailService {
         label: 'Log In to ENAKO OS',
         url: 'https://enakoos.com',
       },
-      footerNote: `Official onboarding documentation [Ref: #${refCode}].`,
+      footerNote: `Official employee onboarding guide [Ref: #${refCode}]. Prepared for ${fullName}.`,
     });
 
     return this.sendEmail({
       to: toEmail,
-      subject: `Welcome to ENAKO, ${firstName} | Onboarding Documentation [Ref: #${refCode}]`,
+      subject: `Welcome to ENAKO, ${firstName} | Official Onboarding Guide & Credentials [Ref: #${refCode}]`,
       html,
       senderType: 'NOTIFICATIONS',
       tag: 'welcome_onboarding',
