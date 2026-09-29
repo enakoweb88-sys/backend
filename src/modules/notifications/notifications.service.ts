@@ -49,13 +49,17 @@ export class NotificationsService {
       },
     });
 
-    // Send email alert to employee's linked account email
+    // Send email alert to employee's linked account email if user has not disabled it
     const recipient = await this.prisma.user.findUnique({
       where: { id: data.userId },
-      select: { email: true },
+      select: {
+        email: true,
+        preference: { select: { emailNotif: true } },
+      },
     });
 
-    if (recipient?.email) {
+    const emailAllowed = recipient?.preference?.emailNotif !== false;
+    if (recipient?.email && emailAllowed) {
       this.mailService.sendNotificationAlert(recipient.email, data.title, data.body, data.link).catch(() => {});
     }
 
@@ -74,7 +78,11 @@ export class NotificationsService {
         status: 'ACTIVE',
         ...(data.excludeUserId ? { id: { not: data.excludeUserId } } : {}),
       },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        email: true,
+        preference: { select: { emailNotif: true } },
+      },
     });
 
     if (!users.length) return;
@@ -89,9 +97,10 @@ export class NotificationsService {
       })),
     });
 
-    // Dispatch email alert to all active employees at their linked account emails
+    // Dispatch email alert to active employees who have email notifications enabled
     for (const u of users) {
-      if (u.email) {
+      const emailAllowed = u.preference?.emailNotif !== false;
+      if (u.email && emailAllowed) {
         this.mailService.sendNotificationAlert(u.email, data.title, data.body, data.link).catch(() => {});
       }
     }

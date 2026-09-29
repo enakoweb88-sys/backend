@@ -180,6 +180,16 @@ export class EmployeesService {
       where: { id },
       data: { passwordHash },
     });
+
+    // Notify employee of administrative password reset via Resend (security@mail.enakoos.com)
+    if (existing.email) {
+      this.mail
+        .sendPasswordChangedAlert(existing.email, existing.fullName)
+        .catch((err) => {
+          console.error(`Failed to send password reset alert email to ${existing.email}:`, err);
+        });
+    }
+
     return { ok: true };
   }
 

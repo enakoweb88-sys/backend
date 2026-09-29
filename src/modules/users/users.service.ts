@@ -1,14 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { UpdateMeDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcryptjs';
 import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async getMe(user: JwtUser) {
     const found = await this.prisma.user.findUnique({
@@ -169,6 +175,16 @@ export class UsersService {
         passwordChangedAt: new Date()
       }
     });
+
+    // Dispatch security alert email via Resend (security@mail.enakoos.com)
+    if (found.email) {
+      this.mailService
+        .sendPasswordChangedAlert(found.email, found.fullName)
+        .catch((err) => {
+          this.logger.error(`Failed to send password change alert to ${found.email}: ${err?.message}`);
+        });
+    }
+
     return { ok: true, message: 'Password updated successfully' };
   }
 

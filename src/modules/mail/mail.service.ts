@@ -1,278 +1,341 @@
-import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  EMAIL_SENDERS,
+  DEFAULT_REPLY_TO,
+  VERIFIED_EMAIL_DOMAIN,
+  EmailSenderType,
+  getSenderAddress,
+} from './mail.constants';
+import { SendEmailOptions, SendEmailResult } from './mail.interfaces';
+import { buildBrandedEmail } from './templates/email-template.builder';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter | null = null;
+  private resend: Resend | null = null;
+  private readonly apiKeyConfigured: boolean = false;
 
-  constructor() {
-    this.initTransporter();
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() private readonly prisma?: PrismaService,
+  ) {
+    const apiKey = (this.config.get<string>('RESEND_API_KEY') || process.env.RESEND_API_KEY || '').trim();
+
+    if (apiKey) {
+      this.resend = new Resend(apiKey);
+      this.apiKeyConfigured = true;
+      this.logger.log(
+        `Resend transactional mail service initialized with verified domain: ${VERIFIED_EMAIL_DOMAIN}`,
+      );
+    } else {
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn(
+          'RESEND_API_KEY is not configured in production environment. Outbound emails will run in simulated mode.',
+        );
+      } else {
+        this.logger.log(
+          'RESEND_API_KEY is not set. Local development email simulation mode active.',
+        );
+      }
+    }
   }
 
-  private initTransporter() {
-    // Explicitly use production verified Gmail SMTP credentials
-    const host = 'smtp.gmail.com';
-    const port = 587;
-    const user = 'enakosupport@gmail.com';
-    const pass = 'drsg gmlk hqfz kwev';
+  /**
+   * Primary central method to send transactional emails via Resend.
+   * Safe execution: Never throws unhandled exceptions to avoid breaking business operations.
+   */
+  async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    const recipients = Array.isArray(options.to) ? options.to : [options.to];
+    const cleanRecipients = recipients
+      .map((r) => r?.trim().toLowerCase())
+      .filter((r): r is string => Boolean(r && r.includes('@')));
 
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: false,
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
-    this.logger.log(`SMTP Mailer initialized using ${host}:${port} (${user})`);
-  }
-
-  async sendMail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
-    const senderUser = (process.env.SMTP_USER || 'enakosupport@gmail.com').trim();
-    const from = `"ENAKO Support" <${senderUser}>`;
-    
-    if (!this.transporter) {
-      this.initTransporter();
+    if (cleanRecipients.length === 0) {
+      this.logger.warn(`Email sending aborted: No valid recipient email provided for subject "${options.subject}"`);
+      return { success: false, error: 'No valid recipient email address' };
     }
 
-    if (this.transporter) {
+    // Resolve Sender Address under verified domain
+    const senderType: EmailSenderType = options.senderType || 'NOTIFICATIONS';
+    const fromAddress = options.from || getSenderAddress(senderType);
+
+    // Resolve Reply-To (Default: support@enakoos.com; NOREPLY does not set replyTo unless specified)
+    let replyToAddress: string | undefined = options.replyTo;
+    if (!replyToAddress && senderType !== 'NOREPLY') {
+      replyToAddress = DEFAULT_REPLY_TO;
+    }
+
+    const recipientLogStr = cleanRecipients.join(', ');
+    this.logger.log(`Attempting email dispatch -> To: [${recipientLogStr}] | Subject: "${options.subject}" | From: ${fromAddress}`);
+
+    if (this.resend && this.apiKeyConfigured) {
       try {
-        const info = await this.transporter.sendMail({
-          from,
-          to,
-          subject,
-          text: text || subject,
-          html,
+        const { data, error } = await this.resend.emails.send({
+          from: fromAddress,
+          to: cleanRecipients,
+          subject: options.subject,
+          html: options.html,
+          text: options.text || options.subject,
+          replyTo: replyToAddress,
+          tags: options.tag ? [{ name: 'category', value: options.tag }] : undefined,
         });
-        this.logger.log(`Email successfully sent to ${to}: "${subject}" (MessageId: ${info.messageId})`);
-        return true;
+
+        if (error) {
+          this.logger.error(
+            `Resend delivery failed for [${recipientLogStr}]: ${error.message} (Name: ${error.name})`,
+          );
+          await this.logEmailAudit({
+            recipients: cleanRecipients,
+            subject: options.subject,
+            sender: fromAddress,
+            success: false,
+            error: error.message,
+            tag: options.tag,
+            actorId: options.actorId,
+          });
+          return { success: false, error: error.message };
+        }
+
+        const messageId = data?.id;
+        this.logger.log(
+          `Email successfully dispatched via Resend -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
+        );
+
+        await this.logEmailAudit({
+          recipients: cleanRecipients,
+          subject: options.subject,
+          sender: fromAddress,
+          success: true,
+          messageId,
+          tag: options.tag,
+          actorId: options.actorId,
+        });
+
+        return { success: true, messageId };
       } catch (err: any) {
-        this.logger.error(`Failed to send email to ${to}: ${err.message}`, err.stack);
-        return false;
+        this.logger.error(
+          `Unexpected exception during Resend dispatch to [${recipientLogStr}]: ${err?.message || err}`,
+        );
+        await this.logEmailAudit({
+          recipients: cleanRecipients,
+          subject: options.subject,
+          sender: fromAddress,
+          success: false,
+          error: err?.message || 'Unexpected exception',
+          tag: options.tag,
+          actorId: options.actorId,
+        });
+        return { success: false, error: err?.message || 'Internal sending error' };
       }
     } else {
-      this.logger.log(`[SIMULATED MAIL TO ${to}] Subject: "${subject}"\nContent: ${text || html}`);
-      return true;
+      // Simulated Email (Dev / Test or pending production key)
+      const simulatedMessageId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      this.logger.log(
+        `[SIMULATED RESEND DISPATCH] To: [${recipientLogStr}] | From: ${fromAddress} | ReplyTo: ${replyToAddress || 'None'} | MessageId: ${simulatedMessageId}`,
+      );
+      await this.logEmailAudit({
+        recipients: cleanRecipients,
+        subject: options.subject,
+        sender: fromAddress,
+        success: true,
+        messageId: simulatedMessageId,
+        tag: options.tag,
+        actorId: options.actorId,
+      });
+      return { success: true, messageId: simulatedMessageId };
     }
   }
 
-  // ── HTML EMAIL TEMPLATES ────────────────────────────────────────────────────
-  async sendNotificationAlert(toEmail: string, title: string, body: string, link?: string) {
-    const html = `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="background: #1c4980; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">ENAKO OUTREACH</h1>
-          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.85;">System & Community Notification Alert</p>
-        </div>
-        <div style="padding: 32px 24px; color: #1e293b;">
-          <h2 style="font-size: 18px; font-weight: 700; color: #1c4980; margin-top: 0;">${title}</h2>
-          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px;">${body}</p>
-          ${
-            link
-              ? `<div style="text-align: center; margin: 28px 0;">
-                  <a href="${link}" style="display: inline-block; background: #1eb4d4; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 6px;">View Notification Details</a>
-                 </div>`
-              : ''
-          }
-        </div>
-        <div style="background: #f8fafc; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
-          ENAKO Outreach Foundation • BP 1234, Yaoundé, Cameroon • <a href="mailto:enakooutreach@gmail.com" style="color: #1eb4d4; text-decoration: none;">enakooutreach@gmail.com</a>
-        </div>
-      </div>
-    `;
-
-    return this.sendMail(toEmail, `[ENAKO Notification] ${title}`, html, body);
+  /**
+   * Backward-compatible sendMail method used by existing legacy callers.
+   */
+  async sendMail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
+    const result = await this.sendEmail({
+      to,
+      subject,
+      html,
+      text,
+      senderType: 'NOTIFICATIONS',
+    });
+    return result.success;
   }
 
-  async sendNewMessageAlert(toEmail: string, senderName: string, channelName: string, messageContent: string) {
-    const title = `New Message from ${senderName}`;
-    const body = `You received a new message in channel <strong>#${channelName}</strong>:<br/><br/><em>"${messageContent}"</em>`;
-    return this.sendNotificationAlert(toEmail, title, body);
+  // ──────────────────────────────────────────────────────────────────────────
+  // KYC TRANSACTIONAL EMAILS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Sent immediately when a client KYC submission is created.
+   * From: kyc@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendKycSubmissionReceived(toEmail: string, applicantName: string, submissionId: string) {
+    const refCode = submissionId.slice(-6).toUpperCase();
+    const html = buildBrandedEmail({
+      badge: 'KYC VERIFICATION',
+      badgeColor: '#00c2c7',
+      headerTitle: 'ENAKO COMPLIANCE',
+      headerSubtitle: 'Client Identity Verification Desk',
+      recipientName: applicantName,
+      headline: 'We Have Received Your KYC Submission',
+      messageHtml: `
+        <p>Thank you for submitting your identity verification documents to ENAKO.</p>
+        <p>Our compliance and verification team has received your submission and is actively reviewing the uploaded documentation in accordance with regulatory KYC standards.</p>
+      `,
+      keyDetails: [
+        { label: 'Tracking Code', value: `#${refCode}`, isHighlight: true },
+        { label: 'Current Status', value: 'Under Active Review' },
+        { label: 'Expected Window', value: '24 to 48 business hours' },
+      ],
+      calloutNote: {
+        title: 'Verification In Progress',
+        text: 'You will receive an automated notification as soon as compliance review is complete. No further action is required from you at this time.',
+        variant: 'info',
+      },
+      ctaButton: {
+        label: 'Check Verification Status',
+        url: 'https://kyc.enakoos.com',
+      },
+    });
+
+    return this.sendEmail({
+      to: toEmail,
+      subject: `KYC Submission Received [Ref: #${refCode}] - ENAKO`,
+      html,
+      senderType: 'KYC',
+      tag: 'kyc_received',
+    });
   }
 
-  async sendNewDonationAlert(toEmail: string, donorName: string, amount: string, method: string) {
-    const title = `New Donation Received: ${amount}`;
-    const body = `Thank you! <strong>${donorName}</strong> has made a generous donation of <strong>${amount}</strong> via ${method}.`;
-    return this.sendNotificationAlert(toEmail, title, body);
+  /**
+   * Sent when a KYC submission is approved by compliance officers.
+   * From: kyc@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendKycApproved(toEmail: string, applicantName: string) {
+    const html = buildBrandedEmail({
+      badge: 'VERIFICATION APPROVED',
+      badgeColor: '#16a34a',
+      headerTitle: 'ENAKO COMPLIANCE',
+      headerSubtitle: 'Client Identity Verification Desk',
+      recipientName: applicantName,
+      headline: 'Your KYC Verification Has Been Approved',
+      messageHtml: `
+        <p>Your client identity verification has been successfully reviewed and <strong>approved</strong> by our compliance team.</p>
+        <p>All compliance restrictions have been lifted from your account, giving you full access to ENAKO platform services, higher transaction thresholds, and unrestricted operations.</p>
+      `,
+      keyDetails: [
+        { label: 'Compliance Status', value: 'Verified & Approved', isHighlight: true },
+        { label: 'Account Tier', value: 'Full Operational Access' },
+      ],
+      ctaButton: {
+        label: 'Access Your Account',
+        url: 'https://enakoos.com',
+        color: '#16a34a',
+      },
+    });
+
+    return this.sendEmail({
+      to: toEmail,
+      subject: 'Your KYC Verification Has Been Approved - ENAKO',
+      html,
+      senderType: 'KYC',
+      tag: 'kyc_approved',
+    });
   }
 
-  // ── MONTHLY PASSWORD SECURITY REMINDER ────────────────────────────────────
-  async sendMonthlyPasswordReminder(toEmail: string, fullName: string) {
-    const title = `🔐 Monthly Security Reminder: Time to Update Your Password`;
-    const html = `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="background: #1c4980; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">ENAKO OS SECURITY</h1>
-          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.85;">Mandatory Monthly Security Compliance</p>
-        </div>
-        <div style="padding: 32px 24px; color: #1e293b;">
-          <h2 style="font-size: 18px; font-weight: 700; color: #1c4980; margin-top: 0;">Hello ${fullName || 'Team Member'},</h2>
-          <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            As part of ENAKO OS monthly security policy, all active staff members are required to update their account password every month to safeguard system operations and corporate data.
-          </p>
-          <div style="background: #f8fafc; border-left: 4px solid #1c4980; padding: 16px; border-radius: 6px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 13px; color: #334155; font-weight: bold;">Password Security Requirements:</p>
-            <ul style="margin: 8px 0 0; padding-left: 20px; font-size: 12px; color: #64748b; line-height: 1.6;">
-              <li>At least 8 characters long</li>
-              <li>Include uppercase & lowercase letters</li>
-              <li>Include numbers and special symbols (@, #, $, etc.)</li>
-              <li>Do not reuse previous passwords</li>
-            </ul>
-          </div>
-          <div style="text-align: center; margin: 28px 0;">
-            <a href="https://enakoos.com/#/settings" style="display: inline-block; background: #1eb4d4; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 6px;">Update Your Password Now</a>
-          </div>
-        </div>
-        <div style="background: #f8fafc; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
-          ENAKO OS Security Team • BP 1234, Yaoundé, Cameroon • <a href="mailto:enakosupport@gmail.com" style="color: #1eb4d4; text-decoration: none;">enakosupport@gmail.com</a>
-        </div>
-      </div>
-    `;
+  /**
+   * Sent when a KYC submission is rejected or requires updated documentation.
+   * From: kyc@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendKycRejected(toEmail: string, applicantName: string, reason?: string) {
+    const html = buildBrandedEmail({
+      badge: 'ACTION REQUIRED',
+      badgeColor: '#dc2626',
+      headerTitle: 'ENAKO COMPLIANCE',
+      headerSubtitle: 'Client Identity Verification Desk',
+      recipientName: applicantName,
+      headline: 'Action Required: Your KYC Verification Status',
+      messageHtml: `
+        <p>Thank you for submitting your KYC verification request. During our compliance review, our team encountered an issue preventing the approval of your submission.</p>
+        <p>Please review the details below and re-submit your updated documentation at your earliest convenience.</p>
+      `,
+      calloutNote: {
+        title: 'Reason for Status Update',
+        text: reason || 'Uploaded identification documents were unclear or expired. Please upload a clear, valid National ID Card (CNI) or passport.',
+        variant: 'danger',
+      },
+      ctaButton: {
+        label: 'Update Your Documents',
+        url: 'https://kyc.enakoos.com',
+        color: '#dc2626',
+      },
+    });
 
-    return this.sendMail(toEmail, `🔐 ENAKO OS Security Alert: Monthly Password Update Reminder`, html);
+    return this.sendEmail({
+      to: toEmail,
+      subject: 'Action Required: Your KYC Verification Status - ENAKO',
+      html,
+      senderType: 'KYC',
+      tag: 'kyc_rejected',
+    });
   }
 
-  // ── SUBSCRIPTION EXPIRATION WARNING (CEO & MANAGER) ──────────────────────
-  async sendSubscriptionExpirationAlert(toEmail: string, subscriptions: Array<{ name: string; cycle: string; cost: number; nextBilling: Date; daysLeft: number }>) {
-    const title = `⚠️ ENAKO OS Alert: Enterprise Subscription Expiration Notice`;
-    
-    const tableRows = subscriptions.map(s => `
-      <tr style="border-bottom: 1px solid #e2e8f0;">
-        <td style="padding: 10px; font-size: 13px; font-weight: bold; color: #1e293b;">${s.name}</td>
-        <td style="padding: 10px; font-size: 12px; color: #64748b;">${s.cycle}</td>
-        <td style="padding: 10px; font-size: 12px; font-weight: bold; color: #1c4980;">${Number(s.cost || 0).toLocaleString()} FCFA</td>
-        <td style="padding: 10px; font-size: 12px; color: #dc2626; font-weight: bold;">${new Date(s.nextBilling).toLocaleDateString()} (${s.daysLeft <= 0 ? 'OVERDUE' : s.daysLeft + ' days left'})</td>
-      </tr>
-    `).join('');
+  // ──────────────────────────────────────────────────────────────────────────
+  // TASK & EMPLOYEE EMAILS
+  // ──────────────────────────────────────────────────────────────────────────
 
-    const html = `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="background: #eab308; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">SUBSCRIPTION NOTICE</h1>
-          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Management & CEO Operational Alert</p>
-        </div>
-        <div style="padding: 32px 24px; color: #1e293b;">
-          <h2 style="font-size: 18px; font-weight: 700; color: #1c4980; margin-top: 0;">Enterprise Subscriptions Requiring Renewal</h2>
-          <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            The following corporate service subscriptions are expiring soon or require immediate renewal to avoid service disruption across ENAKO OS infrastructure:
-          </p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <thead>
-              <tr style="background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0;">
-                <th style="padding: 8px 10px;">Service</th>
-                <th style="padding: 8px 10px;">Cycle</th>
-                <th style="padding: 8px 10px;">Cost</th>
-                <th style="padding: 8px 10px;">Expiration Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
-          <div style="text-align: center; margin: 28px 0;">
-            <a href="https://enakoos.com/#/subscriptions" style="display: inline-block; background: #1c4980; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 6px;">Manage Subscriptions</a>
-          </div>
-        </div>
-        <div style="background: #f8fafc; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
-          ENAKO OS Management Systems • <a href="mailto:enakosupport@gmail.com" style="color: #1eb4d4; text-decoration: none;">enakosupport@gmail.com</a>
-        </div>
-      </div>
-    `;
+  /**
+   * Sent when a new task is assigned to an employee.
+   * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendTaskAssignedAlert(opts: {
+    toEmail: string;
+    assigneeName: string;
+    assignerName: string;
+    taskTitle: string;
+    priority?: string;
+    dueDate?: Date | null;
+    description?: string | null;
+  }) {
+    const dueDateFormatted = opts.dueDate ? new Date(opts.dueDate).toLocaleDateString() : 'No specific deadline set';
+    const html = buildBrandedEmail({
+      badge: 'TASK ASSIGNMENT',
+      badgeColor: '#00c2c7',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'Operations & Workflow',
+      recipientName: opts.assigneeName,
+      headline: opts.taskTitle,
+      messageHtml: `
+        <p>You have been assigned a new operational task by <strong>${opts.assignerName}</strong>.</p>
+        ${opts.description ? `<p style="color: #475569; font-style: italic; margin: 12px 0;">"${opts.description}"</p>` : ''}
+      `,
+      keyDetails: [
+        { label: 'Task Title', value: opts.taskTitle, isHighlight: true },
+        { label: 'Priority', value: opts.priority || 'NORMAL' },
+        { label: 'Due Date', value: dueDateFormatted },
+        { label: 'Assigned By', value: opts.assignerName },
+      ],
+      ctaButton: {
+        label: 'View Task in ENAKO OS',
+        url: 'https://enakoos.com/#/tasks',
+      },
+    });
 
-    return this.sendMail(toEmail, title, html);
+    return this.sendEmail({
+      to: opts.toEmail,
+      subject: `New task assigned to you: ${opts.taskTitle}`,
+      html,
+      senderType: 'NOTIFICATIONS',
+      tag: 'task_assigned',
+    });
   }
 
-  // ── SECURITY BREACH ALERT (TARGET: enakoweb88@gmail.com) ───────────────────
-  async sendSecurityBreachAlert(incidentType: string, details: { ip?: string; email?: string; reason?: string; timestamp?: Date }) {
-    const breachEmailRecipient = 'enakoweb88@gmail.com';
-    const title = `🚨 CRITICAL SECURITY BREACH ALERT: ${incidentType}`;
-    const timestamp = details.timestamp ? new Date(details.timestamp).toLocaleString() : new Date().toLocaleString();
-
-    const html = `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 2px solid #dc2626; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(220,38,38,0.15);">
-        <div style="background: #dc2626; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">🚨 SECURITY BREACH ALERT</h1>
-          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.95;">ENAKO OS Automated Security Protection System</p>
-        </div>
-        <div style="padding: 32px 24px; color: #1e293b;">
-          <h2 style="font-size: 18px; font-weight: 700; color: #dc2626; margin-top: 0;">Incident Type: ${incidentType}</h2>
-          <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            A potential security violation or breach attempt was detected and intercepted by the ENAKO OS security monitor.
-          </p>
-          <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 18px; border-radius: 6px; margin: 20px 0;">
-            <p style="margin: 0 0 8px; font-size: 13px; color: #991b1b; font-weight: bold;">Incident Telemetry Details:</p>
-            <table style="width: 100%; font-size: 12px; color: #7f1d1d;">
-              <tr><td style="padding: 4px 0; font-weight: bold; width: 120px;">Target Email:</td><td>${details.email || 'Unknown / Unauthenticated'}</td></tr>
-              <tr><td style="padding: 4px 0; font-weight: bold;">Origin IP:</td><td>${details.ip || 'Unknown IP'}</td></tr>
-              <tr><td style="padding: 4px 0; font-weight: bold;">Timestamp:</td><td>${timestamp}</td></tr>
-              <tr><td style="padding: 4px 0; font-weight: bold;">Reason / Event:</td><td>${details.reason || 'Unauthorized security boundary violation'}</td></tr>
-            </table>
-          </div>
-          <div style="text-align: center; margin: 28px 0;">
-            <a href="https://enakoos.com/#/audit-logs" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 6px;">Inspect Security Audit Logs</a>
-          </div>
-        </div>
-        <div style="background: #f8fafc; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
-          Automated Emergency Dispatch • Target Administrator: <strong style="color: #dc2626;">${breachEmailRecipient}</strong>
-        </div>
-      </div>
-    `;
-
-    return this.sendMail(breachEmailRecipient, title, html);
-  }
-
-  // ── CORPORATE EMAIL UPDATED NOTIFICATION ────────────────────────────────────
-  async sendCorporateEmailUpdated(newEmail: string, fullName: string, oldEmail: string) {
-    const html = `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-        <div style="background: linear-gradient(135deg, #1c4980 0%, #2563eb 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;">ENAKO CLOUD OS</h1>
-          <p style="margin: 6px 0 0; font-size: 12px; opacity: 0.85; letter-spacing: 0.05em;">Corporate Email Address Update Notification</p>
-        </div>
-        <div style="padding: 32px 28px; color: #1e293b;">
-          <h2 style="font-size: 17px; font-weight: 700; color: #1c4980; margin: 0 0 16px;">Hello ${fullName},</h2>
-          <p style="font-size: 14px; line-height: 1.7; color: #475569; margin-bottom: 20px;">
-            This is an official notification from <strong>ENAKO Cloud OS</strong> to inform you that your corporate email address has been updated by the system administrator.
-          </p>
-          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-            <table style="width: 100%; font-size: 13px; color: #1e293b; border-collapse: collapse;">
-              <tr style="border-bottom: 1px solid #e0f2fe;">
-                <td style="padding: 10px 8px; font-weight: 700; color: #64748b; width: 140px;">Previous Email</td>
-                <td style="padding: 10px 8px; color: #dc2626; font-weight: 600; text-decoration: line-through;">${oldEmail}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px 8px; font-weight: 700; color: #64748b;">New Corporate Email</td>
-                <td style="padding: 10px 8px; color: #16a34a; font-weight: 800;">${newEmail}</td>
-              </tr>
-            </table>
-          </div>
-          <p style="font-size: 14px; line-height: 1.7; color: #475569; margin-bottom: 16px;">
-            <strong>Action Required:</strong> From this point forward, please use your <strong>new corporate email (${newEmail})</strong> to log in to the ENAKO Cloud OS dashboard. Your password remains unchanged.
-          </p>
-          <p style="font-size: 13px; line-height: 1.6; color: #64748b; margin-bottom: 24px;">
-            If you did not expect this change or believe it was made in error, please contact the HR department or write to <a href="mailto:hr@enako.cm" style="color: #2563eb; font-weight: 600;">hr@enako.cm</a> immediately.
-          </p>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="https://enakoos.com" style="display: inline-block; background: #1c4980; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; padding: 13px 32px; border-radius: 8px; letter-spacing: 0.04em;">Log In with New Email →</a>
-          </div>
-        </div>
-        <div style="background: #f8fafc; padding: 14px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9;">
-          ENAKO Cloud OS • HR &amp; Systems Administration • <a href="mailto:hr@enako.cm" style="color: #2563eb; text-decoration: none;">hr@enako.cm</a>
-        </div>
-      </div>
-    `;
-    return this.sendMail(newEmail, '📧 Your ENAKO Corporate Email Address Has Been Updated', html);
-  }
-
-  // ── NEW EMPLOYEE WELCOME EMAIL ────────────────────────────────────────────────
+  /**
+   * Sent to new team members with their initial onboarding documentation & credentials.
+   * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
   async sendWelcomeEmail(opts: {
     toEmail: string;
     fullName: string;
@@ -287,181 +350,339 @@ export class MailService {
     const firstName = fullName.split(' ')[0];
     const refCode = Math.floor(1000 + Math.random() * 9000);
 
-    const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <style>
-    body { margin: 0; padding: 16px; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6; font-size: 16px; }
-    a { color: #1d4ed8; text-decoration: underline; word-break: break-all; }
-    .header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #1d4ed8; }
-    .header h1 { margin: 0 0 8px 0; font-size: 24px; color: #1e293b; font-weight: 800; }
-    .header p { margin: 0; font-size: 15px; color: #475569; }
-    .section { margin-bottom: 28px; }
-    .section-title { font-size: 18px; font-weight: 800; color: #1d4ed8; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.03em; }
-    .credentials-box { font-size: 16px; margin-bottom: 20px; line-height: 1.8; }
-    .cred-item { margin-bottom: 10px; }
-    .cred-label { font-weight: 700; color: #334155; }
-    .cred-val { font-weight: 800; color: #0f172a; word-break: break-all; }
-    .pwd-highlight { background-color: #fef08a; color: #854d0e; padding: 4px 10px; font-family: monospace; font-size: 18px; font-weight: 800; border-radius: 4px; display: inline-block; word-break: break-all; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; margin-bottom: 16px; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-size: 15px; vertical-align: top; word-break: break-word; }
-    th { font-weight: 700; color: #475569; background-color: #f8fafc; }
-    ul, ol { margin: 0 0 16px 0; padding-left: 24px; }
-    li { margin-bottom: 8px; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; }
-  </style>
-</head>
-<body>
+    const html = buildBrandedEmail({
+      badge: 'ONBOARDING',
+      badgeColor: '#00c2c7',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'Human Resources & Talent Management',
+      recipientName: fullName,
+      headline: `Welcome to ENAKO, ${firstName}!`,
+      messageHtml: `
+        <p>On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>.</p>
+        <p>Your official corporate access credentials for ENAKO Cloud OS have been provisioned.</p>
+      `,
+      keyDetails: [
+        { label: 'Login Portal', value: '<a href="https://enakoos.com" style="color: #00adb2; font-weight: 700; text-decoration: none;">https://enakoos.com</a>' },
+        { label: 'Corporate Email', value: loginEmail, isHighlight: true },
+        { label: 'Initial Password', value: `<span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0f172a; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">${password}</span>` },
+        { label: 'Role & Dept', value: `${position} (${department})` },
+      ],
+      calloutNote: {
+        title: 'Security Notice',
+        text: 'Please log in to your account and update your initial password immediately via Settings &rarr; Security.',
+        variant: 'warning',
+      },
+      ctaButton: {
+        label: 'Log In to ENAKO OS',
+        url: 'https://enakoos.com',
+      },
+      footerNote: `Official onboarding documentation [Ref: #${refCode}].`,
+    });
 
-  <!-- HEADER -->
-  <div class="header">
-    <div style="font-size:12px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">ENAKO CLOUD OS • HUMAN RESOURCES</div>
-    <h1>Welcome to ENAKO, ${firstName}!</h1>
-    <p>Official Onboarding Documentation & Employee Guide</p>
-  </div>
+    return this.sendEmail({
+      to: toEmail,
+      subject: `Welcome to ENAKO, ${firstName} | Onboarding Documentation [Ref: #${refCode}]`,
+      html,
+      senderType: 'NOTIFICATIONS',
+      tag: 'welcome_onboarding',
+    });
+  }
 
-  <!-- GREETING -->
-  <p>Dear <strong>${fullName}</strong>,</p>
-  <p>
-    On behalf of executive leadership and the entire team, we welcome you to ENAKO as a <strong>${position}</strong> in the <strong>${department} Department</strong>. You were selected for your expertise, leadership potential, and alignment with our corporate mission.
-  </p>
-  <p>
-    This document serves as your official onboarding guide. It outlines your system credentials, departmental expectations, company policies, operational routines, and contact details. Please review each section carefully.
-  </p>
+  // ──────────────────────────────────────────────────────────────────────────
+  // SECURITY & AUTHENTICATION EMAILS
+  // ──────────────────────────────────────────────────────────────────────────
 
-  <!-- SECTION 1: CREDENTIALS -->
-  <div class="section">
-    <h2 class="section-title">Section 1: Your ENAKO Cloud OS Login Credentials</h2>
-    <p>Your corporate user account has been provisioned. Access your workspace using the credentials below:</p>
-    <div class="credentials-box">
-      <div class="cred-item"><span class="cred-label">Login Portal URL:</span> <a href="https://enakoos.com" style="font-weight:800;font-size:17px;">https://enakoos.com</a></div>
-      <div class="cred-item"><span class="cred-label">Corporate Login Email:</span> <span class="cred-val">${loginEmail}</span></div>
-      <div class="cred-item"><span class="cred-label">Your Login Password:</span> <span class="pwd-highlight">${password}</span></div>
-      <div class="cred-item"><span class="cred-label">Assigned Position:</span> <span class="cred-val">${position} (${department})</span></div>
-    </div>
-    <p style="color:#dc2626;font-size:14px;font-weight:700;">
-      SECURITY NOTICE: You can use the password above to log in immediately at <a href="https://enakoos.com">enakoos.com</a>. Please update your password after logging in via Settings -> Security.
-    </p>
-  </div>
+  /**
+   * Sent when a user's password has been updated.
+   * From: security@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendPasswordChangedAlert(toEmail: string, fullName: string, ip?: string) {
+    const html = buildBrandedEmail({
+      badge: 'SECURITY ALERT',
+      badgeColor: '#dc2626',
+      headerTitle: 'ENAKO SECURITY',
+      headerSubtitle: 'Account Access & Authentication Sentinel',
+      recipientName: fullName,
+      headline: 'Your ENAKO OS Account Password Was Changed',
+      messageHtml: `
+        <p>This is an automated security alert to confirm that the password for your ENAKO OS account (<strong>${toEmail}</strong>) was changed successfully.</p>
+        <p>If you initiated this change, you can safely disregard this email.</p>
+      `,
+      calloutNote: {
+        title: 'Did not authorize this change?',
+        text: `If you did not change your password, your account may be compromised. Please revoke active sessions in Settings or contact support immediately at support@enakoos.com.<br/><br/><small style="color: #64748b;">Recorded at: ${new Date().toUTCString()}${ip ? ` | IP: ${ip}` : ''}</small>`,
+        variant: 'danger',
+      },
+      ctaButton: {
+        label: 'Inspect Active Sessions',
+        url: 'https://enakoos.com/#/settings',
+        color: '#dc2626',
+      },
+      footerNote: 'This security dispatch was triggered automatically by ENAKO OS Security Sentinel.',
+    });
 
-  <!-- SECTION 2: ABOUT ENAKO -->
-  <div class="section">
-    <h2 class="section-title">Section 2: About ENAKO (Company Overview & Divisions)</h2>
-    <p>
-      ENAKO is a multi-division financial technology group headquartered in Yaoundé, Cameroon. Our corporate mission is to deliver secure, modern, and accessible financial services to individuals, businesses, and institutions across Africa and the global diaspora. We operate across three distinct business divisions:
-    </p>
-    
-    <p><strong>Division 1: ENAKO Mobile Application (Consumer Fintech)</strong></p>
-    <ul>
-      <li><strong>Akawo Smart Savings:</strong> Automated high-yield savings plans with flexible schedules.</li>
-      <li><strong>Njangi Digital Savings Groups:</strong> Digitized rotating savings and credit associations managed transparently on-app.</li>
-      <li><strong>Land Banking and Real Estate:</strong> Structured real estate investment opportunities with fixed annual yields.</li>
-      <li><strong>Institutional & Utility Payments:</strong> Tuition, school fees, rent, electricity, water bill settlement, and instant Mobile Money remittances.</li>
-    </ul>
+    return this.sendEmail({
+      to: toEmail,
+      subject: 'Security Alert: Your ENAKO OS Password Was Changed',
+      html,
+      senderType: 'SECURITY',
+      tag: 'security_password_changed',
+    });
+  }
 
-    <p><strong>Division 2: ENAKO Outreach Foundation (Social Impact and NGO)</strong></p>
-    <p>
-      Operating via <a href="https://enakooutreach.cm">enakooutreach.cm</a>, ENAKO Outreach manages non-profit humanitarian and community development initiatives including Charity Fundraising, Academic Scholarships, Infrastructure Development, and Humanitarian Relief.
-    </p>
+  /**
+   * Sent when a corporate email address has been modified by HR or Admin.
+   * From: security@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendCorporateEmailUpdated(newEmail: string, fullName: string, oldEmail: string) {
+    const html = buildBrandedEmail({
+      badge: 'EMAIL UPDATE',
+      badgeColor: '#00c2c7',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'Corporate Identity Administration',
+      recipientName: fullName,
+      headline: 'Your Corporate Email Address Has Been Updated',
+      messageHtml: `
+        <p>Your official corporate email address has been updated by the system administrator.</p>
+        <p>Please use your new corporate email address for all future logins to ENAKO OS. Your password remains unchanged.</p>
+      `,
+      keyDetails: [
+        { label: 'Previous Email', value: `<span style="text-decoration: line-through; color: #94a3b8;">${oldEmail}</span>` },
+        { label: 'New Corporate Email', value: newEmail, isHighlight: true },
+      ],
+      calloutNote: {
+        title: 'Security Alert',
+        text: 'If you did not expect or authorize this change, contact support@enakoos.com immediately.',
+        variant: 'info',
+      },
+      ctaButton: {
+        label: 'Log In with New Email',
+        url: 'https://enakoos.com',
+      },
+    });
 
-    <p><strong>Division 3: ENAKO FX / OTC (Foreign Exchange Desk)</strong></p>
-    <p>
-      Institutional Over-The-Counter (OTC) Foreign Exchange desk catering to commercial importers, exporters, and corporate entities requiring outbound international currency settlements (USD, EUR, NGN, USDT).
-    </p>
-  </div>
+    return this.sendEmail({
+      to: newEmail,
+      subject: 'Your ENAKO Corporate Email Address Has Been Updated',
+      html,
+      senderType: 'SECURITY',
+      tag: 'security_email_updated',
+    });
+  }
 
-  <!-- SECTION 3: CORPORATE STANDARDS -->
-  <div class="section">
-    <h2 class="section-title">Section 3: Corporate Standards & Code of Conduct</h2>
-    <ul>
-      <li><strong>Punctuality:</strong> Logged into ENAKO Cloud OS by your scheduled shift start time.</li>
-      <li><strong>Confidentiality:</strong> Strict non-disclosure regarding proprietary financial data, code, client lists, and operational metrics.</li>
-      <li><strong>Professional Integrity:</strong> High ethical conduct required in all internal and client-facing interactions.</li>
-      <li><strong>Information Security:</strong> Always lock or sign out of your workstation when stepping away.</li>
-    </ul>
-  </div>
+  /**
+   * Monthly mandatory password security reminder cron notification.
+   * From: security@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendMonthlyPasswordReminder(toEmail: string, fullName: string) {
+    const html = buildBrandedEmail({
+      badge: 'SECURITY COMPLIANCE',
+      badgeColor: '#eab308',
+      headerTitle: 'ENAKO SECURITY',
+      headerSubtitle: 'Mandatory Monthly Password Refresh',
+      recipientName: fullName || 'Team Member',
+      headline: 'Monthly Security Reminder: Time to Update Your Password',
+      messageHtml: `
+        <p>As part of ENAKO OS corporate security policy, all active staff members are required to refresh their account password every month to safeguard enterprise operations and client data.</p>
+      `,
+      calloutNote: {
+        title: 'Password Security Requirements',
+        text: 'Minimum 8 characters with a mix of uppercase letters, lowercase letters, numbers, and symbols. Do not reuse previous passwords.',
+        variant: 'warning',
+      },
+      ctaButton: {
+        label: 'Update Your Password Now',
+        url: 'https://enakoos.com/#/settings',
+        color: '#0f172a',
+      },
+    });
 
-  <!-- SECTION 4: DEPARTMENT EXPECTATIONS -->
-  <div class="section">
-    <h2 class="section-title">Section 4: Department Expectations for ${department}</h2>
-    <p>
-      As a <strong>${position}</strong> in the <strong>${department} Department</strong>, you are responsible for executing departmental objectives and maintaining high standards of deliverable quality.
-    </p>
+    return this.sendEmail({
+      to: toEmail,
+      subject: '🔐 ENAKO OS Security Alert: Monthly Password Update Reminder',
+      html,
+      senderType: 'SECURITY',
+      tag: 'security_monthly_password_reminder',
+    });
+  }
 
-    ${responsibilities ? `
-    <p><strong>Your Core Responsibilities & Duties:</strong></p>
-    <div style="white-space:pre-wrap;margin-bottom:16px;line-height:1.7;">${responsibilities}</div>
-    ` : ''}
+  /**
+   * Critical security breach or incident alert dispatch.
+   * From: security@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendSecurityBreachAlert(
+    incidentType: string,
+    details: { ip?: string; email?: string; reason?: string; timestamp?: Date },
+  ) {
+    const breachRecipient = this.config.get<string>('SECURITY_ALERT_EMAIL') || 'security@enakoos.com';
+    const timestampStr = details.timestamp ? new Date(details.timestamp).toUTCString() : new Date().toUTCString();
 
-    ${goals ? `
-    <p><strong>Your Initial Performance Goals:</strong></p>
-    <div style="white-space:pre-wrap;margin-bottom:16px;line-height:1.7;">${goals}</div>
-    ` : ''}
-  </div>
+    const html = buildBrandedEmail({
+      badge: 'CRITICAL ALERT',
+      badgeColor: '#dc2626',
+      headerTitle: 'ENAKO SECURITY SENTINEL',
+      headerSubtitle: 'Incident Detection & Telemetry',
+      headline: `Security Incident Detected: ${incidentType}`,
+      messageHtml: `
+        <p>A security boundary violation or suspicious authentication event was intercepted by the ENAKO OS Security Sentinel.</p>
+      `,
+      keyDetails: [
+        { label: 'Incident Type', value: incidentType, isHighlight: true },
+        { label: 'Target Identity', value: details.email || 'Unauthenticated / Anonymous' },
+        { label: 'Origin IP', value: details.ip || 'Unknown IP' },
+        { label: 'Timestamp', value: timestampStr },
+        { label: 'Trigger Reason', value: details.reason || 'Unauthorized security violation' },
+      ],
+      ctaButton: {
+        label: 'Inspect Security Audit Logs',
+        url: 'https://enakoos.com/#/audit-logs',
+        color: '#dc2626',
+      },
+    });
 
-  <!-- SECTION 5: WEEKLY REPORTS -->
-  <div class="section">
-    <h2 class="section-title">Section 5: Weekly Activity Reports</h2>
-    <p>
-      All staff must submit a Weekly Activity Report (WAR) via ENAKO OS every <strong>Friday before 5:00 PM</strong> detailing:
-    </p>
-    <ol>
-      <li>Tasks Completed This Week (with task IDs referenced)</li>
-      <li>Tasks In Progress and Expected Delivery Dates</li>
-      <li>Operational Blockers and Remediation Requests</li>
-      <li>Key Commitments for Upcoming Week</li>
-    </ol>
-  </div>
+    return this.sendEmail({
+      to: breachRecipient,
+      subject: `🚨 CRITICAL SECURITY BREACH ALERT: ${incidentType}`,
+      html,
+      senderType: 'SECURITY',
+      tag: 'security_breach_alert',
+    });
+  }
 
-  <!-- SECTION 6: STAFF MEALS -->
-  <div class="section">
-    <h2 class="section-title">Section 6: Staff Meal Subsidy Policy</h2>
-    <p>
-      ENAKO provides a standard daily meal allowance of <strong>1,000 FCFA</strong> on active working days (50% company subsidy of 500 FCFA / 50% employee contribution of 500 FCFA). Log daily meals under "Staff Meals" in ENAKO OS by end of shift.
-    </p>
-  </div>
+  // ──────────────────────────────────────────────────────────────────────────
+  // SYSTEM & NOTIFICATION EMAILS
+  // ──────────────────────────────────────────────────────────────────────────
 
-  <!-- SECTION 7: SUPPORT & CONTACTS -->
-  <div class="section">
-    <h2 class="section-title">Section 7: Management & Support Contact</h2>
-    <p>For all HR inquiries, technical assistance, onboarding support, and executive escalations, please contact Management directly:</p>
-    <table>
-      <thead>
-        <tr>
-          <th>Department / Scope</th>
-          <th>Support Email</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Management & Support (HR, IT, Operations, Executive)</td>
-          <td><a href="mailto:enakomgt@gmail.com" style="font-weight:700;font-size:16px;">enakomgt@gmail.com</a></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  /**
+   * General in-app notification mirror email.
+   * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
+   */
+  async sendNotificationAlert(toEmail: string, title: string, body: string, link?: string) {
+    const html = buildBrandedEmail({
+      badge: 'NOTIFICATION',
+      badgeColor: '#00c2c7',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'System & Operations Alert',
+      headline: title,
+      messageHtml: `<p>${body}</p>`,
+      ctaButton: link
+        ? {
+            label: 'View Notification Details',
+            url: link.startsWith('http') ? link : `https://enakoos.com#${link}`,
+          }
+        : undefined,
+    });
 
-  <!-- CLOSING & FOOTER -->
-  <div class="footer">
-    <p style="font-size:16px;font-weight:700;color:#1e293b;margin:0 0 8px 0;">Welcome aboard, ${firstName}.</p>
-    <p style="margin:0 0 16px 0;">We look forward to your contributions toward ENAKO's growth and operational success.</p>
-    <p style="margin:0;"><strong>ENAKO Executive Management & Human Resources</strong></p>
-    <p style="margin:4px 0 0 0;">ENAKO Cloud OS • Yaoundé, Cameroon • <a href="mailto:enakomgt@gmail.com">enakomgt@gmail.com</a></p>
-    <p style="margin:16px 0 0 0;font-size:12px;">© ${new Date().getFullYear()} ENAKO Cloud OS • Confidential • Prepared for ${fullName} • <a href="https://enakoos.com">https://enakoos.com</a></p>
-  </div>
+    return this.sendEmail({
+      to: toEmail,
+      subject: `[ENAKO] ${title}`,
+      html,
+      text: body,
+      senderType: 'NOTIFICATIONS',
+      tag: 'system_notification',
+    });
+  }
 
-</body>
-</html>
-    `;
+  async sendNewMessageAlert(toEmail: string, senderName: string, channelName: string, messageContent: string) {
+    const title = `New Message from ${senderName}`;
+    const body = `You received a new message in channel <strong>#${channelName}</strong>:<br/><br/><em>"${messageContent}"</em>`;
+    return this.sendNotificationAlert(toEmail, title, body, '/communications');
+  }
 
-    return this.sendMail(
-      toEmail,
-      `Welcome to ENAKO, ${firstName} | Onboarding Documentation [Ref: #${refCode}]`,
-      html
-    );
+  async sendNewDonationAlert(toEmail: string, donorName: string, amount: string, method: string) {
+    const title = `New Donation Received: ${amount}`;
+    const body = `Thank you! <strong>${donorName}</strong> has made a generous donation of <strong>${amount}</strong> via ${method}.`;
+    return this.sendNotificationAlert(toEmail, title, body, '/outreach');
+  }
+
+  async sendSubscriptionExpirationAlert(
+    toEmail: string,
+    subscriptions: Array<{ name: string; cycle: string; cost: number; nextBilling: Date; daysLeft: number }>,
+  ) {
+    const tableRows = subscriptions
+      .map(
+        (s) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 8px 10px; font-weight: bold; color: #1e293b;">${s.name}</td>
+        <td style="padding: 8px 10px; color: #64748b;">${s.cycle}</td>
+        <td style="padding: 8px 10px; font-weight: bold; color: #1c4980;">${Number(s.cost || 0).toLocaleString()} FCFA</td>
+        <td style="padding: 8px 10px; color: #dc2626; font-weight: bold;">${new Date(s.nextBilling).toLocaleDateString()} (${s.daysLeft <= 0 ? 'OVERDUE' : s.daysLeft + ' days left'})</td>
+      </tr>
+    `,
+      )
+      .join('');
+
+    const html = buildBrandedEmail({
+      badge: 'SUBSCRIPTION EXPIRATION',
+      badgeColor: '#eab308',
+      headerTitle: 'ENAKO OPERATIONS',
+      headerSubtitle: 'Executive Operational Notice',
+      headline: 'Enterprise Subscriptions Requiring Renewal',
+      messageHtml: `
+        <p>The following corporate service subscriptions are expiring soon or require immediate renewal to avoid service disruption across ENAKO OS:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
+          <thead>
+            <tr style="background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0;">
+              <th style="padding: 8px 10px;">Service</th>
+              <th style="padding: 8px 10px;">Cycle</th>
+              <th style="padding: 8px 10px;">Cost</th>
+              <th style="padding: 8px 10px;">Expiration</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      `,
+      ctaButton: {
+        label: 'Manage Subscriptions',
+        url: 'https://enakoos.com/#/subscriptions',
+      },
+    });
+
+    return this.sendEmail({
+      to: toEmail,
+      subject: '⚠️ ENAKO OS Alert: Enterprise Subscription Expiration Notice',
+      html,
+      senderType: 'NOTIFICATIONS',
+      tag: 'subscription_expiration',
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // INTERNAL AUDIT LOGGING HELPER
+  // ──────────────────────────────────────────────────────────────────────────
+  private async logEmailAudit(entry: {
+    recipients: string[];
+    subject: string;
+    sender: string;
+    success: boolean;
+    messageId?: string;
+    error?: string;
+    tag?: string;
+    actorId?: string;
+  }) {
+    if (!this.prisma) return;
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          action: entry.success ? 'EMAIL_SENT' : 'EMAIL_FAILED',
+          entity: 'EMAIL_DISPATCH',
+          entityId: entry.messageId || 'FAILED',
+          actorId: entry.actorId || null,
+          metadata: {
+            recipients: entry.recipients,
+            subject: entry.subject,
+            sender: entry.sender,
+            tag: entry.tag || 'general',
+            success: entry.success,
+            messageId: entry.messageId || null,
+            error: entry.error || null,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+    } catch (err: any) {
+      // Never let audit log failure crash the email service
+      this.logger.debug(`Could not write email audit log: ${err?.message}`);
+    }
   }
 }
-

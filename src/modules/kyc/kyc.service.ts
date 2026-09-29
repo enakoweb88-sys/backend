@@ -1,14 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { KycStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class KycService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(KycService.name);
 
-  submit(body: {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
+
+  async submit(body: {
     applicantType: string;
     applicantName: string;
     email?: string;
@@ -16,7 +22,7 @@ export class KycService {
     payload: Record<string, unknown>;
     documents?: Array<{ documentType: string; fileName: string; fileUrl: string; mimeType?: string }>;
   }) {
-    return this.prisma.kycSubmission.create({
+    const submission = await this.prisma.kycSubmission.create({
       data: {
         applicantType: body.applicantType,
         applicantName: body.applicantName,
@@ -27,6 +33,17 @@ export class KycService {
       },
       include: { documents: true },
     });
+
+    // Dispatch confirmation email to applicant via Resend (kyc@mail.enakoos.com)
+    if (body.email) {
+      this.mailService
+        .sendKycSubmissionReceived(body.email, body.applicantName, submission.id)
+        .catch((err) => {
+          this.logger.error(`Failed to send KYC confirmation email to ${body.email}: ${err?.message}`);
+        });
+    }
+
+    return submission;
   }
 
   list(query: QueryDto & { status?: string }) {
@@ -54,7 +71,7 @@ export class KycService {
 
   async review(id: string, dto: KycReviewDto, user: JwtUser) {
     const approved = dto.status === KycStatus.APPROVED && user.role === RoleName.CEO;
-    return this.prisma.kycSubmission.update({
+    const submission = await this.prisma.kycSubmission.update({
       where: { id },
       data: {
         status: dto.status as any,
@@ -65,5 +82,25 @@ export class KycService {
       },
       include: { documents: true },
     });
+
+    // Transactional KYC decision notifications via Resend (kyc@mail.enakoos.com)
+    if (submission.email) {
+      if (dto.status === KycStatus.APPROVED) {
+        this.mailService
+          .sendKycApproved(submission.email, submission.applicantName)
+          .catch((err) => {
+            this.logger.error(`Failed to send KYC approval email to ${submission.email}: ${err?.message}`);
+          });
+      } else if (dto.status === KycStatus.REJECTED) {
+        this.mailService
+          .sendKycRejected(submission.email, submission.applicantName, dto.rejectionReason)
+          .catch((err) => {
+            this.logger.error(`Failed to send KYC rejection email to ${submission.email}: ${err?.message}`);
+          });
+      }
+    }
+
+    return submission;
   }
 }
+

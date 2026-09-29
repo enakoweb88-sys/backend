@@ -1,12 +1,18 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { RoleName, TaskStatus, TaskPriority } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskCommentDto, CreateTaskDto, UpdateTaskDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TasksService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   list(user: JwtUser) {
     const where = user.role === RoleName.EMPLOYEE ? { assigneeId: user.sub } : {};
@@ -60,7 +66,7 @@ export class TasksService {
       });
       tasks.push(task);
 
-      // Create notification for the assignee
+      // Create in-app notification for the assignee
       if (assigneeId !== user.sub) {
         await this.prisma.notification.create({
           data: {
@@ -71,6 +77,23 @@ export class TasksService {
             link: '/tasks',
           }
         });
+
+        // Dispatch transactional email via Resend (notifications@mail.enakoos.com)
+        if (task.assignee?.email) {
+          this.mailService
+            .sendTaskAssignedAlert({
+              toEmail: task.assignee.email,
+              assigneeName: task.assignee.fullName || 'Team Member',
+              assignerName: task.creator?.fullName || user.email || 'ENAKO Team',
+              taskTitle: task.title,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              description: task.description,
+            })
+            .catch((err) => {
+              this.logger.error(`Failed to send task assignment email to ${task.assignee?.email}: ${err?.message}`);
+            });
+        }
       }
     }
 

@@ -97,7 +97,7 @@ export class SecurityService {
     }
   }
 
-  // ── DIRECT METHOD: SECURITY BREACH / INCIDENT ALERT TO enakoweb88@gmail.com ──
+  // ── DIRECT METHOD: SECURITY BREACH / INCIDENT ALERT ──
   async reportSecurityBreach(incidentType: string, details: { ip?: string; email?: string; reason?: string; timestamp?: Date }) {
     this.logger.warn(`🚨 EMERGENCY: Security breach alert reported - [${incidentType}]`);
 
@@ -116,7 +116,7 @@ export class SecurityService {
       this.logger.error('Failed to save security breach audit log to database', e);
     }
 
-    // Immediately dispatch email to enakoweb88@gmail.com
+    // Immediately dispatch email alert via Resend (security@mail.enakoos.com)
     return this.mailService.sendSecurityBreachAlert(incidentType, details);
   }
 }
