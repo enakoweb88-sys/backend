@@ -65,6 +65,8 @@ export class MealsService {
         status: dto.status as MealStatus,
         mealName: dto.mealName,
         mealTime: dto.mealTime,
+        vendor: dto.vendor || 'mami chop',
+        notes: dto.notes,
         totalAmount,
         companyAmount,
         employeeAmount,

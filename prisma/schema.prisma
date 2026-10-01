@@ -231,6 +231,8 @@ model MealRecord {
   updatedAt      DateTime   @updatedAt
   mealName       String?
   mealTime       String?
+  vendor         String?    @default("Mami Chop")
+  notes          String?
   employee       User       @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, date])

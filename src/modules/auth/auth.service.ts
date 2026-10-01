@@ -32,13 +32,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.role.name !== dto.role) {
+    if (dto.role && user.role.name !== dto.role) {
       this.securityService.reportSecurityBreach('ROLE_MISMATCH_ATTEMPT', {
         email: dto.email,
         ip,
-        reason: `Attempted login with unassigned role ${dto.role} (Actual role: ${user.role.name}).`,
+        reason: `Attempted login with selected portal ${dto.role}, but user is assigned to ${user.role.name}. Proceeding with assigned role.`,
       }).catch(() => {});
-      throw new ForbiddenException('This account is not assigned to the selected role');
     }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);

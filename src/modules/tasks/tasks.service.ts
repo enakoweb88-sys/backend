@@ -49,7 +49,17 @@ export class TasksService {
       : [dto.assigneeId || user.sub];
 
     const tasks = [];
-    for (const assigneeId of assigneeIds) {
+    for (const rawAssigneeId of assigneeIds) {
+      let assigneeId = rawAssigneeId;
+      if (assigneeId) {
+        const exists = await this.prisma.user.findUnique({ where: { id: assigneeId } });
+        if (!exists) {
+          assigneeId = user.sub;
+        }
+      } else {
+        assigneeId = user.sub;
+      }
+
       const task = await this.prisma.task.create({
         data: {
           title: dto.title,

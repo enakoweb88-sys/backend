@@ -15,15 +15,23 @@ export class EmployeesService {
   async list(query: QueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 25;
-    const where = query.search
-      ? {
-          OR: [
-            { fullName: { contains: query.search, mode: 'insensitive' as const } },
-            { email: { contains: query.search, mode: 'insensitive' as const } },
-            { title: { contains: query.search, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
+    const where: any = {
+      status: { not: UserStatus.DELETED },
+    };
+
+    if (query.search) {
+      where.OR = [
+        { fullName: { contains: query.search, mode: 'insensitive' as const } },
+        { email: { contains: query.search, mode: 'insensitive' as const } },
+        { title: { contains: query.search, mode: 'insensitive' as const } },
+      ];
+    }
+
+    if (query.department) {
+      where.department = {
+        name: { equals: query.department, mode: 'insensitive' as const }
+      };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({

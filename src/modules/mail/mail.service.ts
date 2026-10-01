@@ -175,7 +175,7 @@ export class MailService {
     const refCode = submissionId.slice(-6).toUpperCase();
     const html = buildBrandedEmail({
       badge: 'KYC VERIFICATION',
-      badgeColor: '#00c2c7',
+      badgeColor: '#001f5b',
       headerTitle: 'ENAKO COMPLIANCE',
       headerSubtitle: 'Client Identity Verification Desk',
       recipientName: applicantName,
@@ -302,7 +302,7 @@ export class MailService {
     const dueDateFormatted = opts.dueDate ? new Date(opts.dueDate).toLocaleDateString() : 'No specific deadline set';
     const html = buildBrandedEmail({
       badge: 'TASK ASSIGNMENT',
-      badgeColor: '#00c2c7',
+      badgeColor: '#001f5b',
       headerTitle: 'ENAKO OS',
       headerSubtitle: 'Operations & Workflow',
       recipientName: opts.assigneeName,
@@ -445,7 +445,7 @@ export class MailService {
 
     const html = buildBrandedEmail({
       badge: 'ONBOARDING',
-      badgeColor: '#00c2c7',
+      badgeColor: '#001f5b',
       headerTitle: 'ENAKO OS',
       headerSubtitle: 'Human Resources & Talent Management',
       recipientName: fullName,
@@ -527,7 +527,7 @@ export class MailService {
   async sendCorporateEmailUpdated(newEmail: string, fullName: string, oldEmail: string) {
     const html = buildBrandedEmail({
       badge: 'EMAIL UPDATE',
-      badgeColor: '#00c2c7',
+      badgeColor: '#001f5b',
       headerTitle: 'ENAKO OS',
       headerSubtitle: 'Corporate Identity Administration',
       recipientName: fullName,
@@ -650,7 +650,7 @@ export class MailService {
   async sendNotificationAlert(toEmail: string, title: string, body: string, link?: string) {
     const html = buildBrandedEmail({
       badge: 'NOTIFICATION',
-      badgeColor: '#00c2c7',
+      badgeColor: '#001f5b',
       headerTitle: 'ENAKO OS',
       headerSubtitle: 'System & Operations Alert',
       headline: title,

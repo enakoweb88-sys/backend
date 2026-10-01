@@ -43,6 +43,10 @@ export class QueryDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc' = 'desc';
+
+  @IsOptional()
+  @IsString()
+  department?: string;
 }
 
 // ─── Employees ────────────────────────────────────────────────────────────────
@@ -386,6 +390,14 @@ export class MealDto {
   @IsString()
   @IsOptional()
   mealTime?: string;
+
+  @IsString()
+  @IsOptional()
+  vendor?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 
   @Type(() => Number)
   @IsNumber()

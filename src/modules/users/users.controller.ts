@@ -52,7 +52,6 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('CEO', 'MANAGER')
   listAll(@Query('search') search?: string) {
     return this.users.listAll(search);
   }

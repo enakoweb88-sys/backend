@@ -10,6 +10,9 @@ export class DepartmentsController {
   @Get()
   async list() {
     return this.prisma.department.findMany({
+      include: {
+        _count: { select: { users: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }

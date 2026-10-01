@@ -1,6 +1,6 @@
 export interface EmailTemplateConfig {
   badge?: string;
-  badgeColor?: string; // hex color for badge accent (default #00c2c7)
+  badgeColor?: string; // hex color for badge accent (default #001f5b)
   headerTitle?: string; // e.g. "ENAKO OS"
   headerSubtitle?: string; // e.g. "Security & Access Sentinel" or "Compliance & KYC Desk"
   recipientName?: string;
@@ -26,7 +26,7 @@ export interface EmailTemplateConfig {
  * Avoids rigid boxed containers and artificial cards for a high-end, clean brand feel (Stripe/Linear style).
  */
 export function buildBrandedEmail(config: EmailTemplateConfig): string {
-  const badgeColor = config.badgeColor || '#00c2c7';
+  const badgeColor = config.badgeColor || '#001f5b';
   const headerTitle = config.headerTitle || 'ENAKO';
   const headerSubtitle = config.headerSubtitle || 'Cloud Operating System';
 
@@ -63,7 +63,7 @@ export function buildBrandedEmail(config: EmailTemplateConfig): string {
   // Elegant accent note (using a single vertical brand line instead of a heavy box)
   let noteHtml = '';
   if (config.calloutNote) {
-    let accentColor = '#00c2c7';
+    let accentColor = '#001f5b';
     let textColor = '#334155';
     if (config.calloutNote.variant === 'success') accentColor = '#16a34a';
     else if (config.calloutNote.variant === 'warning') accentColor = '#eab308';
@@ -80,8 +80,8 @@ export function buildBrandedEmail(config: EmailTemplateConfig): string {
   // CTA Button
   let ctaHtml = '';
   if (config.ctaButton) {
-    const btnBg = config.ctaButton.color || '#00c2c7';
-    const btnText = btnBg === '#00c2c7' ? '#0a0f2c' : '#ffffff';
+    const btnBg = config.ctaButton.color || '#001f5b';
+    const btnText = '#ffffff';
     ctaHtml = `
       <div style="margin: 32px 0 24px 0;">
         <a href="${config.ctaButton.url}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: ${btnBg}; color: ${btnText}; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 8px; letter-spacing: 0.02em;">
@@ -111,7 +111,7 @@ export function buildBrandedEmail(config: EmailTemplateConfig): string {
             <span style="font-size: 18px; font-weight: 900; letter-spacing: 0.06em; color: #0f172a; text-transform: uppercase;">
               ${headerTitle}
             </span>
-            <span style="font-size: 18px; font-weight: 900; color: #00c2c7;">.</span>
+            <span style="font-size: 18px; font-weight: 900; color: #001f5b;">.</span>
             <div style="font-size: 11px; font-weight: 600; color: #94a3b8; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px;">
               ${headerSubtitle}
             </div>
