@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EMAIL_SENDERS,
@@ -17,6 +18,7 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private resend: Resend | null = null;
   private readonly apiKeyConfigured: boolean = false;
+  private transporter: nodemailer.Transporter | null = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -31,20 +33,30 @@ export class MailService {
         `Resend transactional mail service initialized with verified domain: ${VERIFIED_EMAIL_DOMAIN}`,
       );
     } else {
-      if (process.env.NODE_ENV === 'production') {
-        this.logger.warn(
-          'RESEND_API_KEY is not configured in production environment. Outbound emails will run in simulated mode.',
-        );
-      } else {
-        this.logger.log(
-          'RESEND_API_KEY is not set. Local development email simulation mode active.',
-        );
-      }
+      this.logger.log('RESEND_API_KEY is not set. SMTP delivery channel active.');
+    }
+
+    const smtpHost = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(this.config.get<string>('SMTP_PORT') || process.env.SMTP_PORT || '587', 10);
+    const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
+    const smtpPass = this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev';
+
+    try {
+      this.transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: { user: smtpUser, pass: smtpPass },
+        tls: { rejectUnauthorized: false },
+      });
+      this.logger.log(`Nodemailer SMTP mail transporter initialized (${smtpUser} via ${smtpHost}:${smtpPort})`);
+    } catch (e: any) {
+      this.logger.warn(`Could not initialize nodemailer transporter: ${e?.message}`);
     }
   }
 
   /**
-   * Primary central method to send transactional emails via Resend.
+   * Primary central method to send transactional emails via Resend with SMTP fallback.
    * Safe execution: Never throws unhandled exceptions to avoid breaking business operations.
    */
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
@@ -71,6 +83,9 @@ export class MailService {
     const recipientLogStr = cleanRecipients.join(', ');
     this.logger.log(`Attempting email dispatch -> To: [${recipientLogStr}] | Subject: "${options.subject}" | From: ${fromAddress}`);
 
+    let lastError: string | undefined;
+
+    // 1. Attempt dispatch via Resend if API key is configured
     if (this.resend && this.apiKeyConfigured) {
       try {
         const { data, error } = await this.resend.emails.send({
@@ -83,25 +98,53 @@ export class MailService {
           tags: options.tag ? [{ name: 'category', value: options.tag }] : undefined,
         });
 
-        if (error) {
-          this.logger.error(
-            `Resend delivery failed for [${recipientLogStr}]: ${error.message} (Name: ${error.name})`,
+        if (!error && data?.id) {
+          const messageId = data.id;
+          this.logger.log(
+            `Email successfully dispatched via Resend -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
           );
+
           await this.logEmailAudit({
             recipients: cleanRecipients,
             subject: options.subject,
             sender: fromAddress,
-            success: false,
-            error: error.message,
+            success: true,
+            messageId,
             tag: options.tag,
             actorId: options.actorId,
           });
-          return { success: false, error: error.message };
-        }
 
-        const messageId = data?.id;
+          return { success: true, messageId };
+        } else if (error) {
+          this.logger.warn(
+            `Resend delivery notice for [${recipientLogStr}]: ${error.message}. Proceeding to SMTP channel...`,
+          );
+          lastError = error.message;
+        }
+      } catch (err: any) {
+        this.logger.warn(
+          `Resend exception for [${recipientLogStr}]: ${err?.message || err}. Proceeding to SMTP channel...`,
+        );
+        lastError = err?.message;
+      }
+    }
+
+    // 2. Dispatch via Nodemailer SMTP (Live guaranteed delivery)
+    if (this.transporter) {
+      try {
+        const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
+        const info = await this.transporter.sendMail({
+          from: `"ENAKO Notifications" <${smtpUser}>`,
+          to: cleanRecipients,
+          subject: options.subject,
+          html: options.html,
+          text: options.text || options.subject,
+          replyTo: replyToAddress || DEFAULT_REPLY_TO,
+        });
+
+        const messageId = info.messageId || `smtp_${Date.now()}`;
         this.logger.log(
-          `Email successfully dispatched via Resend -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
+          `Email successfully dispatched via SMTP -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
         );
 
         await this.logEmailAudit({
@@ -115,38 +158,25 @@ export class MailService {
         });
 
         return { success: true, messageId };
-      } catch (err: any) {
+      } catch (smtpErr: any) {
         this.logger.error(
-          `Unexpected exception during Resend dispatch to [${recipientLogStr}]: ${err?.message || err}`,
+          `SMTP dispatch failed for [${recipientLogStr}]: ${smtpErr?.message || smtpErr}`,
         );
-        await this.logEmailAudit({
-          recipients: cleanRecipients,
-          subject: options.subject,
-          sender: fromAddress,
-          success: false,
-          error: err?.message || 'Unexpected exception',
-          tag: options.tag,
-          actorId: options.actorId,
-        });
-        return { success: false, error: err?.message || 'Internal sending error' };
+        lastError = smtpErr?.message;
       }
-    } else {
-      // Simulated Email (Dev / Test or pending production key)
-      const simulatedMessageId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      this.logger.log(
-        `[SIMULATED RESEND DISPATCH] To: [${recipientLogStr}] | From: ${fromAddress} | ReplyTo: ${replyToAddress || 'None'} | MessageId: ${simulatedMessageId}`,
-      );
-      await this.logEmailAudit({
-        recipients: cleanRecipients,
-        subject: options.subject,
-        sender: fromAddress,
-        success: true,
-        messageId: simulatedMessageId,
-        tag: options.tag,
-        actorId: options.actorId,
-      });
-      return { success: true, messageId: simulatedMessageId };
     }
+
+    // 3. Fallback audit record if all dispatch channels failed
+    await this.logEmailAudit({
+      recipients: cleanRecipients,
+      subject: options.subject,
+      sender: fromAddress,
+      success: false,
+      error: lastError || 'All dispatch methods failed',
+      tag: options.tag,
+      actorId: options.actorId,
+    });
+    return { success: false, error: lastError || 'Email delivery failed' };
   }
 
   /**
@@ -734,6 +764,129 @@ export class MailService {
       html,
       senderType: 'NOTIFICATIONS',
       tag: 'subscription_expiration',
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASH COLLECTION & TRANSACTION EMAILS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Sent to client when a field cash collection transaction is created/initiated.
+   */
+  async sendCollectionReceiptAlert(opts: {
+    toEmail: string;
+    clientName: string;
+    collectionId: string;
+    amount: number;
+    currency?: string;
+    collectorName?: string;
+    location?: string;
+    status?: string;
+    time?: string;
+    depositDestination?: string;
+  }) {
+    const currencyStr = opts.currency || 'FCFA';
+    const amountFormatted = `${Number(opts.amount || 0).toLocaleString()} ${currencyStr}`;
+    const cleanColId = opts.collectionId.replace(/^COL-/, '');
+
+    const html = buildBrandedEmail({
+      badge: 'CASH RECEIPT',
+      badgeColor: '#001f5b',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'Field Treasury & Cash Management Desk',
+      recipientName: opts.clientName,
+      headline: `Cash Collection Initiated: ${amountFormatted}`,
+      messageHtml: `
+        <p>This is an automated confirmation that a field cash collection has been registered for your account on the ENAKO Cloud Operating System.</p>
+        <p>Please review the transaction summary below. A permanent digital audit record has been provisioned.</p>
+      `,
+      keyDetails: [
+        { label: 'Transaction ID', value: `#COL-${cleanColId}`, isHighlight: true },
+        { label: 'Client Name', value: opts.clientName },
+        { label: 'Amount Collected', value: amountFormatted, isHighlight: true },
+        { label: 'Field Collector', value: opts.collectorName || 'Field Cash Collector' },
+        { label: 'Location', value: opts.location || 'Douala Field Sector' },
+        { label: 'Deposit Destination', value: opts.depositDestination || 'ENAKO Central Treasury' },
+        { label: 'Current Status', value: opts.status || 'PENDING' },
+        { label: 'Date & Time', value: opts.time || new Date().toLocaleString() },
+      ],
+      calloutNote: {
+        title: 'Collection Verification',
+        text: 'Your payment is registered and undergoing reconciliation. You will receive an official settlement confirmation once reconciled with treasury.',
+        variant: 'info',
+      },
+      ctaButton: {
+        label: 'View Portal Status',
+        url: 'https://enakoos.com',
+      },
+      footerNote: `Automated transaction receipt #${cleanColId} issued to ${opts.clientName}.`,
+    });
+
+    return this.sendEmail({
+      to: opts.toEmail,
+      subject: `E-NAKO CASH RECEIPT: Collection #${cleanColId} (${amountFormatted})`,
+      html,
+      senderType: 'NOTIFICATIONS',
+      tag: 'cash_collection_receipt',
+    });
+  }
+
+  /**
+   * Sent to client when a field cash collection is marked COMPLETE / SETTLED.
+   */
+  async sendCollectionSettledAlert(opts: {
+    toEmail: string;
+    clientName: string;
+    collectionId: string;
+    amount: number;
+    currency?: string;
+    collectorName?: string;
+    location?: string;
+    time?: string;
+  }) {
+    const currencyStr = opts.currency || 'FCFA';
+    const amountFormatted = `${Number(opts.amount || 0).toLocaleString()} ${currencyStr}`;
+    const cleanColId = opts.collectionId.replace(/^COL-/, '');
+
+    const html = buildBrandedEmail({
+      badge: 'SETTLED & RECONCILED',
+      badgeColor: '#16a34a',
+      headerTitle: 'ENAKO OS',
+      headerSubtitle: 'Field Treasury & Settlement Confirmation',
+      recipientName: opts.clientName,
+      headline: `Payment Settled: ${amountFormatted}`,
+      messageHtml: `
+        <p>Your cash collection transaction has been <strong>successfully verified and settled</strong> by ENAKO Executive Management.</p>
+        <p>All funds have been credited and reconciled with your account ledger.</p>
+      `,
+      keyDetails: [
+        { label: 'Transaction ID', value: `#COL-${cleanColId}`, isHighlight: true },
+        { label: 'Client Name', value: opts.clientName },
+        { label: 'Total Reconciled', value: amountFormatted, isHighlight: true },
+        { label: 'Reconciled By', value: opts.collectorName || 'ENAKO Treasury Desk' },
+        { label: 'Settlement Status', value: 'COMPLETED & VERIFIED', isHighlight: true },
+        { label: 'Timestamp', value: opts.time || new Date().toLocaleString() },
+      ],
+      calloutNote: {
+        title: 'Official Settlement Complete',
+        text: 'This transaction is complete and archived in your official statements.',
+        variant: 'success',
+      },
+      ctaButton: {
+        label: 'View Statement in ENAKO OS',
+        url: 'https://enakoos.com',
+        color: '#16a34a',
+      },
+      footerNote: `Official settlement advice #${cleanColId} issued to ${opts.clientName}.`,
+    });
+
+    return this.sendEmail({
+      to: opts.toEmail,
+      subject: `✔ E-NAKO SETTLEMENT CONFIRMATION: Collection #${cleanColId} Completed (${amountFormatted})`,
+      html,
+      senderType: 'NOTIFICATIONS',
+      tag: 'cash_collection_settled',
     });
   }
 

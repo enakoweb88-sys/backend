@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { CreateCashCollectionDto, QueryDto, UpdateCashCollectionStatusDto } from '../../common/dtos';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CashCollectionStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class CashCollectionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async list(query: QueryDto & { status?: string; collectorId?: string }, user?: JwtUser) {
     try {
@@ -124,7 +128,7 @@ export class CashCollectionsService {
       }
     }
 
-    return this.prisma.cashCollection.create({
+    const created = await this.prisma.cashCollection.create({
       data: {
         collectorId,
         clientName: dto.clientName,
@@ -148,11 +152,42 @@ export class CashCollectionsService {
         },
       },
     });
+
+    // Send collection receipt email if client email is provided or discovered
+    let clientEmail: string | undefined;
+    try {
+      if (dto.description && dto.description.startsWith('{')) {
+        const parsed = JSON.parse(dto.description);
+        clientEmail = parsed.clientEmail;
+      }
+    } catch (e) {}
+
+    if (!clientEmail) {
+      const clientUser = await this.prisma.user.findFirst({
+        where: { fullName: { contains: dto.clientName, mode: 'insensitive' } }
+      });
+      if (clientUser && clientUser.email) clientEmail = clientUser.email;
+    }
+
+    if (clientEmail && clientEmail.includes('@')) {
+      this.mail.sendCollectionReceiptAlert({
+        toEmail: clientEmail,
+        clientName: dto.clientName,
+        collectionId: created.id,
+        amount: Number(dto.amountCollected),
+        currency: dto.currency || 'FCFA',
+        collectorName: created.collector?.fullName || 'Field Cash Collector',
+        location: dto.location,
+        status: created.status,
+      }).catch(err => console.warn('Outbound receipt email notice:', err?.message || err));
+    }
+
+    return created;
   }
 
   async updateStatus(id: string, dto: UpdateCashCollectionStatusDto) {
     await this.findOne(id);
-    return this.prisma.cashCollection.update({
+    const updated = await this.prisma.cashCollection.update({
       where: { id },
       data: {
         status: dto.status.toUpperCase() as CashCollectionStatus,
@@ -167,6 +202,52 @@ export class CashCollectionsService {
         },
       },
     });
+
+    if (updated.status === 'COMPLETE') {
+      let clientEmail: string | undefined;
+      try {
+        if (updated.description && updated.description.startsWith('{')) {
+          const parsed = JSON.parse(updated.description);
+          clientEmail = parsed.clientEmail;
+        }
+      } catch (e) {}
+
+      if (!clientEmail) {
+        const clientUser = await this.prisma.user.findFirst({
+          where: { fullName: { contains: updated.clientName, mode: 'insensitive' } }
+        });
+        if (clientUser && clientUser.email) clientEmail = clientUser.email;
+      }
+
+      if (clientEmail && clientEmail.includes('@')) {
+        this.mail.sendCollectionSettledAlert({
+          toEmail: clientEmail,
+          clientName: updated.clientName,
+          collectionId: updated.id,
+          amount: Number(updated.amountCollected),
+          currency: updated.currency || 'FCFA',
+          collectorName: updated.collector?.fullName,
+          location: updated.location,
+        }).catch(err => console.warn('Outbound settlement email notice:', err?.message || err));
+      }
+    }
+
+    return updated;
+  }
+
+  async sendReceiptEmail(body: {
+    toEmail: string;
+    clientName: string;
+    collectionId: string;
+    amount: number;
+    currency?: string;
+    collectorName?: string;
+    location?: string;
+    status?: string;
+    time?: string;
+    depositDestination?: string;
+  }) {
+    return this.mail.sendCollectionReceiptAlert(body);
   }
 
   async getStats() {

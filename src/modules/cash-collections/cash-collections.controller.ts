@@ -79,4 +79,20 @@ export class CashCollectionsController {
   updateStatus(@Param('id') id: string, @Body() dto: UpdateCashCollectionStatusDto) {
     return this.cashCollections.updateStatus(id, dto);
   }
+
+  @Post('send-receipt')
+  sendReceipt(@Body() body: {
+    toEmail: string;
+    clientName: string;
+    collectionId: string;
+    amount: number;
+    currency?: string;
+    collectorName?: string;
+    location?: string;
+    status?: string;
+    time?: string;
+    depositDestination?: string;
+  }) {
+    return this.cashCollections.sendReceiptEmail(body);
+  }
 }
