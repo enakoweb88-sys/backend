@@ -95,6 +95,7 @@ export class MailService {
           html: options.html,
           text: options.text || options.subject,
           replyTo: replyToAddress,
+          attachments: options.attachments,
           tags: options.tag ? [{ name: 'category', value: options.tag }] : undefined,
         });
 
@@ -132,14 +133,14 @@ export class MailService {
     // 2. Dispatch via Nodemailer SMTP (Live guaranteed delivery)
     if (this.transporter) {
       try {
-        const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
         const info = await this.transporter.sendMail({
-          from: `"ENAKO Notifications" <${smtpUser}>`,
+          from: fromAddress,
           to: cleanRecipients,
           subject: options.subject,
           html: options.html,
           text: options.text || options.subject,
-          replyTo: replyToAddress || DEFAULT_REPLY_TO,
+          replyTo: replyToAddress || 'cash@enakoos.com',
+          attachments: options.attachments,
         });
 
         const messageId = info.messageId || `smtp_${Date.now()}`;
@@ -768,11 +769,12 @@ export class MailService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // CASH COLLECTION & TRANSACTION EMAILS
+  // CASH COLLECTION & TRANSACTION EMAILS (cash@enakoos.com)
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
    * Sent to client when a field cash collection transaction is created/initiated.
+   * From: "ENAKO Cash Desk" <cash@enakoos.com> | Reply-To: cash@enakoos.com
    */
   async sendCollectionReceiptAlert(opts: {
     toEmail: string;
@@ -785,55 +787,80 @@ export class MailService {
     status?: string;
     time?: string;
     depositDestination?: string;
+    pdfBase64?: string;
   }) {
     const currencyStr = opts.currency || 'FCFA';
     const amountFormatted = `${Number(opts.amount || 0).toLocaleString()} ${currencyStr}`;
     const cleanColId = opts.collectionId.replace(/^COL-/, '');
 
+    const messageHtml = `
+      <p>This is an automated confirmation that a field cash collection has been registered for your account on the ENAKO Cloud Operating System.</p>
+      <div style="margin: 20px 0; padding: 14px 18px; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 8px;">
+        <div style="font-size: 13px; font-weight: 800; color: #0891b2; margin-bottom: 4px;">📎 Official PDF Receipt Attached</div>
+        <div style="font-size: 13px; color: #164e63; line-height: 1.5;">Your official transaction slip <strong>E_NAKO_Receipt_${cleanColId}.pdf</strong> is attached to this email for your records and can be downloaded below.</div>
+      </div>
+      <p>Please review the verified collection parameters below. A permanent digital audit record has been provisioned.</p>
+    `;
+
     const html = buildBrandedEmail({
       badge: 'CASH RECEIPT',
-      badgeColor: '#001f5b',
-      headerTitle: 'ENAKO OS',
-      headerSubtitle: 'Field Treasury & Cash Management Desk',
+      badgeColor: '#0891b2',
+      headerTitle: 'ENAKO CASH DESK',
+      headerSubtitle: 'Field Treasury & Official Cash Receipt',
       recipientName: opts.clientName,
       headline: `Cash Collection Initiated: ${amountFormatted}`,
-      messageHtml: `
-        <p>This is an automated confirmation that a field cash collection has been registered for your account on the ENAKO Cloud Operating System.</p>
-        <p>Please review the transaction summary below. A permanent digital audit record has been provisioned.</p>
-      `,
+      messageHtml,
       keyDetails: [
         { label: 'Transaction ID', value: `#COL-${cleanColId}`, isHighlight: true },
         { label: 'Client Name', value: opts.clientName },
         { label: 'Amount Collected', value: amountFormatted, isHighlight: true },
         { label: 'Field Collector', value: opts.collectorName || 'Field Cash Collector' },
+        { label: 'Dispatch Desk', value: 'cash@enakoos.com' },
         { label: 'Location', value: opts.location || 'Douala Field Sector' },
         { label: 'Deposit Destination', value: opts.depositDestination || 'ENAKO Central Treasury' },
         { label: 'Current Status', value: opts.status || 'PENDING' },
         { label: 'Date & Time', value: opts.time || new Date().toLocaleString() },
       ],
       calloutNote: {
-        title: 'Collection Verification',
-        text: 'Your payment is registered and undergoing reconciliation. You will receive an official settlement confirmation once reconciled with treasury.',
+        title: 'Collection Verification & PDF Receipt',
+        text: 'Your payment is registered and undergoing reconciliation. The official signed PDF receipt is attached to this email. For inquiries, reply directly to cash@enakoos.com.',
         variant: 'info',
       },
       ctaButton: {
         label: 'View Portal Status',
         url: 'https://enakoos.com',
+        color: '#0891b2',
       },
-      footerNote: `Automated transaction receipt #${cleanColId} issued to ${opts.clientName}.`,
+      footerNote: `Automated transaction receipt #${cleanColId} issued from cash@enakoos.com to ${opts.clientName}.`,
     });
+
+    let attachments: Array<{ filename: string; content: any; contentType: string }> | undefined;
+    if (opts.pdfBase64) {
+      const cleanBase64 = opts.pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+      attachments = [
+        {
+          filename: `E_NAKO_Receipt_${cleanColId}.pdf`,
+          content: Buffer.from(cleanBase64, 'base64'),
+          contentType: 'application/pdf',
+        },
+      ];
+    }
 
     return this.sendEmail({
       to: opts.toEmail,
       subject: `E-NAKO CASH RECEIPT: Collection #${cleanColId} (${amountFormatted})`,
       html,
-      senderType: 'NOTIFICATIONS',
+      senderType: 'CASH',
+      from: '"ENAKO Cash Desk" <cash@enakoos.com>',
+      replyTo: 'cash@enakoos.com',
+      attachments,
       tag: 'cash_collection_receipt',
     });
   }
 
   /**
    * Sent to client when a field cash collection is marked COMPLETE / SETTLED.
+   * From: "ENAKO Cash Desk" <cash@enakoos.com> | Reply-To: cash@enakoos.com
    */
   async sendCollectionSettledAlert(opts: {
     toEmail: string;
@@ -844,33 +871,41 @@ export class MailService {
     collectorName?: string;
     location?: string;
     time?: string;
+    pdfBase64?: string;
   }) {
     const currencyStr = opts.currency || 'FCFA';
     const amountFormatted = `${Number(opts.amount || 0).toLocaleString()} ${currencyStr}`;
     const cleanColId = opts.collectionId.replace(/^COL-/, '');
 
+    const messageHtml = `
+      <p>Your cash collection transaction has been <strong>successfully verified and settled</strong> by ENAKO Executive Management.</p>
+      <div style="margin: 20px 0; padding: 14px 18px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+        <div style="font-size: 13px; font-weight: 800; color: #166534; margin-bottom: 4px;">📎 Official Settlement PDF Attached</div>
+        <div style="font-size: 13px; color: #14532d; line-height: 1.5;">Your verified settlement slip <strong>E_NAKO_Receipt_${cleanColId}.pdf</strong> has been attached to this email.</div>
+      </div>
+      <p>All funds have been credited and reconciled with your account ledger.</p>
+    `;
+
     const html = buildBrandedEmail({
       badge: 'SETTLED & RECONCILED',
       badgeColor: '#16a34a',
-      headerTitle: 'ENAKO OS',
+      headerTitle: 'ENAKO CASH DESK',
       headerSubtitle: 'Field Treasury & Settlement Confirmation',
       recipientName: opts.clientName,
       headline: `Payment Settled: ${amountFormatted}`,
-      messageHtml: `
-        <p>Your cash collection transaction has been <strong>successfully verified and settled</strong> by ENAKO Executive Management.</p>
-        <p>All funds have been credited and reconciled with your account ledger.</p>
-      `,
+      messageHtml,
       keyDetails: [
         { label: 'Transaction ID', value: `#COL-${cleanColId}`, isHighlight: true },
         { label: 'Client Name', value: opts.clientName },
         { label: 'Total Reconciled', value: amountFormatted, isHighlight: true },
         { label: 'Reconciled By', value: opts.collectorName || 'ENAKO Treasury Desk' },
+        { label: 'Dispatch Desk', value: 'cash@enakoos.com' },
         { label: 'Settlement Status', value: 'COMPLETED & VERIFIED', isHighlight: true },
         { label: 'Timestamp', value: opts.time || new Date().toLocaleString() },
       ],
       calloutNote: {
         title: 'Official Settlement Complete',
-        text: 'This transaction is complete and archived in your official statements.',
+        text: 'This transaction is complete and archived in your official statements. For any support, contact cash@enakoos.com.',
         variant: 'success',
       },
       ctaButton: {
@@ -878,14 +913,29 @@ export class MailService {
         url: 'https://enakoos.com',
         color: '#16a34a',
       },
-      footerNote: `Official settlement advice #${cleanColId} issued to ${opts.clientName}.`,
+      footerNote: `Official settlement advice #${cleanColId} issued from cash@enakoos.com to ${opts.clientName}.`,
     });
+
+    let attachments: Array<{ filename: string; content: any; contentType: string }> | undefined;
+    if (opts.pdfBase64) {
+      const cleanBase64 = opts.pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+      attachments = [
+        {
+          filename: `E_NAKO_Receipt_${cleanColId}.pdf`,
+          content: Buffer.from(cleanBase64, 'base64'),
+          contentType: 'application/pdf',
+        },
+      ];
+    }
 
     return this.sendEmail({
       to: opts.toEmail,
       subject: `✔ E-NAKO SETTLEMENT CONFIRMATION: Collection #${cleanColId} Completed (${amountFormatted})`,
       html,
-      senderType: 'NOTIFICATIONS',
+      senderType: 'CASH',
+      from: '"ENAKO Cash Desk" <cash@enakoos.com>',
+      replyTo: 'cash@enakoos.com',
+      attachments,
       tag: 'cash_collection_settled',
     });
   }

@@ -2,13 +2,14 @@ export const VERIFIED_EMAIL_DOMAIN = 'mail.enakoos.com';
 export const DEFAULT_REPLY_TO = 'support@enakoos.com';
 
 export const EMAIL_SENDERS = {
-  SECURITY: 'security@mail.enakoos.com',
-  NOTIFICATIONS: 'notifications@mail.enakoos.com',
-  KYC: 'kyc@mail.enakoos.com',
-  NOREPLY: 'noreply@mail.enakoos.com',
-  SUPPORT: 'support@mail.enakoos.com',
-  HELP: 'help@mail.enakoos.com',
-  CONTACT: 'contact@mail.enakoos.com',
+  SECURITY: 'security@enakoos.com',
+  NOTIFICATIONS: 'notifications@enakoos.com',
+  KYC: 'kyc@enakoos.com',
+  CASH: 'cash@enakoos.com',
+  NOREPLY: 'noreply@enakoos.com',
+  SUPPORT: 'support@enakoos.com',
+  HELP: 'help@enakoos.com',
+  CONTACT: 'contact@enakoos.com',
 } as const;
 
 export type EmailSenderType = keyof typeof EMAIL_SENDERS;
@@ -17,6 +18,7 @@ export const EMAIL_DISPLAY_NAMES: Record<EmailSenderType, string> = {
   SECURITY: 'ENAKO Security',
   NOTIFICATIONS: 'ENAKO Notifications',
   KYC: 'ENAKO KYC Team',
+  CASH: 'ENAKO Cash Desk',
   NOREPLY: 'ENAKO OS',
   SUPPORT: 'ENAKO Support',
   HELP: 'ENAKO Helpdesk',

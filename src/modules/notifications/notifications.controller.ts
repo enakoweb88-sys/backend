@@ -54,6 +54,7 @@ export class NotificationsController {
     status?: string;
     time?: string;
     depositDestination?: string;
+    pdfBase64?: string;
     html?: string;
     text?: string;
   }) {
@@ -69,6 +70,7 @@ export class NotificationsController {
         status: body.status || 'PENDING',
         time: body.time || new Date().toLocaleString(),
         depositDestination: body.depositDestination,
+        pdfBase64: body.pdfBase64,
       });
     }
 

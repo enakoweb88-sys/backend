@@ -246,6 +246,7 @@ export class CashCollectionsService {
     status?: string;
     time?: string;
     depositDestination?: string;
+    pdfBase64?: string;
   }) {
     return this.mail.sendCollectionReceiptAlert(body);
   }

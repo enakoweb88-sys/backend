@@ -92,6 +92,7 @@ export class CashCollectionsController {
     status?: string;
     time?: string;
     depositDestination?: string;
+    pdfBase64?: string;
   }) {
     return this.cashCollections.sendReceiptEmail(body);
   }
