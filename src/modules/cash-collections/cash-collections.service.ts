@@ -130,6 +130,7 @@ export class CashCollectionsService {
 
     const created = await this.prisma.cashCollection.create({
       data: {
+        id: dto.id || undefined,
         collectorId,
         clientName: dto.clientName,
         location: dto.location,
@@ -186,9 +187,21 @@ export class CashCollectionsService {
   }
 
   async updateStatus(id: string, dto: UpdateCashCollectionStatusDto) {
-    await this.findOne(id);
+    let existing = await this.prisma.cashCollection.findUnique({ where: { id } });
+    if (!existing) {
+      existing = await this.prisma.cashCollection.findFirst({
+        where: {
+          OR: [
+            { id },
+            { description: { contains: id } },
+          ],
+        },
+      });
+    }
+    if (!existing) throw new NotFoundException(`Cash collection #${id} not found`);
+
     const updated = await this.prisma.cashCollection.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         status: dto.status.toUpperCase() as CashCollectionStatus,
       },

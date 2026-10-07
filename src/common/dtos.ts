@@ -617,6 +617,10 @@ export class UpdateSubscriptionDto {
 
 export class CreateCashCollectionDto {
   @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsString()
   clientName!: string;
 
   @IsString()

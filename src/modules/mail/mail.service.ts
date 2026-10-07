@@ -133,15 +133,41 @@ export class MailService {
     // 2. Dispatch via Nodemailer SMTP (Live guaranteed delivery)
     if (this.transporter) {
       try {
-        const info = await this.transporter.sendMail({
-          from: fromAddress,
-          to: cleanRecipients,
-          subject: options.subject,
-          html: options.html,
-          text: options.text || options.subject,
-          replyTo: replyToAddress || 'cash@enakoos.com',
-          attachments: options.attachments,
-        });
+        let info;
+        try {
+          info = await this.transporter.sendMail({
+            from: fromAddress,
+            to: cleanRecipients,
+            subject: options.subject,
+            html: options.html,
+            text: options.text || options.subject,
+            replyTo: replyToAddress || 'cash@enakoos.com',
+            attachments: options.attachments,
+          });
+        } catch (firstErr: any) {
+          this.logger.warn(`Primary SMTP attempt failed (${firstErr?.message}). Retrying via secure port 465 SSL...`);
+          const sslTransporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: {
+              user: this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com',
+              pass: this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev',
+            },
+            connectionTimeout: 8000,
+            greetingTimeout: 8000,
+            socketTimeout: 10000,
+          });
+          info = await sslTransporter.sendMail({
+            from: fromAddress,
+            to: cleanRecipients,
+            subject: options.subject,
+            html: options.html,
+            text: options.text || options.subject,
+            replyTo: replyToAddress || 'cash@enakoos.com',
+            attachments: options.attachments,
+          });
+        }
 
         const messageId = info.messageId || `smtp_${Date.now()}`;
         this.logger.log(
