@@ -37,7 +37,7 @@ export class MailService {
     }
 
     const smtpHost = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST || 'smtp.gmail.com';
-    const smtpPort = parseInt(this.config.get<string>('SMTP_PORT') || process.env.SMTP_PORT || '587', 10);
+    const smtpPort = parseInt(this.config.get<string>('SMTP_PORT') || process.env.SMTP_PORT || '465', 10);
     const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
     const smtpPass = this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev';
 
@@ -48,8 +48,9 @@ export class MailService {
         secure: smtpPort === 465,
         auth: { user: smtpUser, pass: smtpPass },
         tls: { rejectUnauthorized: false },
-      });
-      this.logger.log(`Nodemailer SMTP mail transporter initialized (${smtpUser} via ${smtpHost}:${smtpPort})`);
+        family: 4, // Critical for cloud platforms (Render): prevents ENETUNREACH on IPv6
+      } as any);
+      this.logger.log(`Nodemailer SMTP mail transporter initialized (${smtpUser} via ${smtpHost}:${smtpPort}, IPv4)`);
     } catch (e: any) {
       this.logger.warn(`Could not initialize nodemailer transporter: ${e?.message}`);
     }
@@ -132,39 +133,45 @@ export class MailService {
 
     // 2. Dispatch via Nodemailer SMTP (Live guaranteed delivery)
     if (this.transporter) {
+      const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
+      const displayNameMatch = fromAddress.match(/"([^"]+)"/);
+      const displayName = displayNameMatch ? displayNameMatch[1] : 'ENAKO Compliance';
+      const smtpSender = `"${displayName}" <${smtpUser}>`;
+
       try {
         let info;
         try {
           info = await this.transporter.sendMail({
-            from: fromAddress,
+            from: smtpSender,
             to: cleanRecipients,
             subject: options.subject,
             html: options.html,
             text: options.text || options.subject,
-            replyTo: replyToAddress || 'cash@enakoos.com',
+            replyTo: replyToAddress || 'support@enakoos.com',
             attachments: options.attachments,
           });
         } catch (firstErr: any) {
-          this.logger.warn(`Primary SMTP attempt failed (${firstErr?.message}). Retrying via secure port 465 SSL...`);
+          this.logger.warn(`Primary SMTP attempt failed (${firstErr?.message}). Retrying via secure port 465 SSL IPv4...`);
           const sslTransporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
             port: 465,
             secure: true,
+            family: 4,
             auth: {
-              user: this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com',
+              user: smtpUser,
               pass: this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev',
             },
-            connectionTimeout: 8000,
-            greetingTimeout: 8000,
-            socketTimeout: 10000,
-          });
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 12000,
+          } as any);
           info = await sslTransporter.sendMail({
-            from: fromAddress,
+            from: smtpSender,
             to: cleanRecipients,
             subject: options.subject,
             html: options.html,
             text: options.text || options.subject,
-            replyTo: replyToAddress || 'cash@enakoos.com',
+            replyTo: replyToAddress || 'support@enakoos.com',
             attachments: options.attachments,
           });
         }
