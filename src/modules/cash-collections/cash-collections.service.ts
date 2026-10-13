@@ -248,6 +248,137 @@ export class CashCollectionsService {
     return updated;
   }
 
+  async listCollectors() {
+    try {
+      const users = await this.prisma.user.findMany({
+        where: {
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          title: true,
+          address: true,
+          responsibilities: true,
+          createdAt: true,
+          role: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return users.map((u) => {
+        let meta: any = {};
+        try {
+          if (u.responsibilities && u.responsibilities.startsWith('{')) {
+            meta = JSON.parse(u.responsibilities);
+          }
+        } catch {}
+
+        const names = (u.fullName || '').trim().split(' ');
+        const firstName = names[0] || 'Collector';
+        const lastName = names.slice(1).join(' ') || '';
+
+        return {
+          id: u.id,
+          firstName,
+          lastName,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone || meta.phone || '',
+          branch: u.address || meta.branch || 'Douala Main Hub',
+          role: meta.role || u.title || (u.role?.name === 'CEO' ? 'CEO / Senior Manager' : 'Field Cash Collector'),
+          terminalId: meta.terminalId || `TRM-${u.id.slice(-4).toUpperCase()}`,
+          password: meta.password || '123456',
+          status: 'ACTIVE',
+          createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString(),
+        };
+      });
+    } catch (err) {
+      console.error('Error fetching collectors:', err);
+      return [];
+    }
+  }
+
+  async createCollector(data: {
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    email: string;
+    phone?: string;
+    branch?: string;
+    role?: string;
+    terminalId?: string;
+    password?: string;
+  }) {
+    try {
+      const emailLower = data.email.trim().toLowerCase();
+      const existing = await this.prisma.user.findUnique({
+        where: { email: emailLower },
+      });
+
+      if (existing) {
+        return existing;
+      }
+
+      let defaultRole = await this.prisma.role.findFirst({
+        where: { name: 'EMPLOYEE' },
+      });
+      if (!defaultRole) {
+        defaultRole = await this.prisma.role.findFirst();
+      }
+      if (!defaultRole) {
+        defaultRole = await this.prisma.role.create({
+          data: { name: 'EMPLOYEE', description: 'Field Cash Staff' },
+        });
+      }
+
+      const fullName = (data.fullName || `${data.firstName || ''} ${data.lastName || ''}`).trim() || 'Field Collector';
+      const terminalId = data.terminalId || `TRM-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const metadata = JSON.stringify({
+        terminalId,
+        branch: data.branch || 'Douala Main Hub',
+        role: data.role || 'Field Cash Collector',
+        password: data.password || '123456',
+        phone: data.phone || '',
+      });
+
+      const user = await this.prisma.user.create({
+        data: {
+          fullName,
+          email: emailLower,
+          phone: data.phone,
+          title: data.role || 'Field Cash Collector',
+          address: data.branch || 'Douala Main Hub',
+          passwordHash: data.password ? `plain:${data.password}` : 'default-hash',
+          responsibilities: metadata,
+          roleId: defaultRole.id,
+        },
+      });
+
+      const names = fullName.split(' ');
+      return {
+        id: user.id,
+        firstName: names[0] || 'Collector',
+        lastName: names.slice(1).join(' ') || '',
+        fullName,
+        email: user.email,
+        phone: user.phone || '',
+        branch: user.address || 'Douala Main Hub',
+        role: data.role || 'Field Cash Collector',
+        terminalId,
+        password: data.password || '123456',
+        status: 'ACTIVE',
+        createdAt: user.createdAt.toISOString(),
+      };
+    } catch (err) {
+      console.error('Error creating collector in DB:', err);
+      throw err;
+    }
+  }
+
   async sendReceiptEmail(body: {
     toEmail: string;
     clientName: string;

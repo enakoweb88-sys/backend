@@ -46,6 +46,16 @@ export class CashCollectionsController {
     return this.cashCollections.getStats();
   }
 
+  @Get('collectors')
+  listCollectors() {
+    return this.cashCollections.listCollectors();
+  }
+
+  @Post('collectors')
+  createCollector(@Body() dto: any) {
+    return this.cashCollections.createCollector(dto);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.cashCollections.findOne(id);
