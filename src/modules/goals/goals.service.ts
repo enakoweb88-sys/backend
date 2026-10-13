@@ -125,6 +125,9 @@ export class GoalsService {
   async updateProgress(id: string, currentValue: number, user: JwtUser) {
     const goal = await this.prisma.goal.findUnique({ where: { id } });
     if (!goal) throw new NotFoundException('Goal not found');
+    if (user.role === RoleName.EMPLOYEE && (goal.scope !== 'PERSONAL' || goal.ownerId !== user.sub)) {
+      throw new ForbiddenException('Employees can update progress only for KPIs assigned to them.');
+    }
 
     const updated = await this.prisma.goal.update({
       where: { id },

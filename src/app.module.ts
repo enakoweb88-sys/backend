@@ -34,7 +34,6 @@ import { OutreachModule } from './modules/outreach/outreach.module';
 import { InvestmentsModule } from './modules/investments/investments.module';
 import { MailModule } from './modules/mail/mail.module';
 import { SecurityModule } from './modules/security/security.module';
-import { KpisModule } from './modules/kpis/kpis.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 
@@ -62,7 +61,6 @@ import { CacheModule } from '@nestjs/cache-manager';
     TasksModule,
     GoalsModule,
     PerformanceModule,
-    KpisModule,
     // Communications
     AnnouncementsModule,
     NotificationsModule,

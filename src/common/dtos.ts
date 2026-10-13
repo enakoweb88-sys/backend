@@ -9,7 +9,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  Max,
   Min,
   MinLength,
 } from 'class-validator';
@@ -120,19 +119,15 @@ export class CreateEmployeeDto {
   @IsOptional()
   goals?: string;
 
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @Max(100)
+  @IsArray()
   @IsOptional()
-  kpiTarget?: number;
-
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  @IsOptional()
-  initialKpiScore?: number;
+  kpis?: Array<{
+    title: string;
+    description?: string;
+    targetValue?: number;
+    unit?: string;
+    dueDate?: string;
+  }>;
 }
 
 export class UpdateEmployeeDto {
@@ -202,30 +197,6 @@ export class UpdateEmployeeDto {
   @IsOptional()
   goals?: string;
 
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  @IsOptional()
-  kpiTarget?: number;
-}
-
-export class SubmitKpiScoreDto {
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  score!: number;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
-}
-
-export class UpdateEmployeeKpiScoreDto extends SubmitKpiScoreDto {
-  @IsString()
-  @IsOptional()
-  period?: string;
 }
 
 // ─── Users (Self) ─────────────────────────────────────────────────────────────

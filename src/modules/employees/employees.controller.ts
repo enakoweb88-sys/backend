@@ -15,6 +15,12 @@ export class EmployeesController {
     return this.employees.list(query);
   }
 
+  @Get(':id')
+  @Roles('CEO', 'MANAGER')
+  getById(@Param('id') id: string) {
+    return this.employees.getById(id);
+  }
+
   @Post()
   @Roles('CEO', 'MANAGER')
   create(@Body() dto: CreateEmployeeDto) {

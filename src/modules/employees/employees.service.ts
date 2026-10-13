@@ -47,6 +47,15 @@ export class EmployeesService {
     return { items: items.map(this.toEmployee), total, page, limit };
   }
 
+  async getById(id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, status: { not: UserStatus.DELETED } },
+      include: { role: true, department: true, ledDepartments: true },
+    });
+    if (!user) throw new NotFoundException('Employee not found');
+    return this.toEmployee(user);
+  }
+
   async create(dto: CreateEmployeeDto) {
     const existingEmail = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() }
@@ -78,7 +87,6 @@ export class EmployeesService {
         personalEmail: dto.personalEmail,
         employmentType: dto.employmentType,
         salary: dto.salary,
-        kpiTarget: dto.kpiTarget,
         emergencyContact: dto.emergencyContact,
         hireDate: dto.hireDate ? new Date(dto.hireDate) : null,
         responsibilities: dto.responsibilities,
@@ -95,14 +103,19 @@ export class EmployeesService {
       include: { role: true, department: true, ledDepartments: true },
     });
 
-    if (dto.initialKpiScore !== undefined) {
-      await this.prisma.employeeKpiScore.create({
-        data: {
-          userId: user.id,
-          period: this.currentPeriod(),
-          score: dto.initialKpiScore,
-          notes: 'Initial KPI score set during employee profile creation.',
-        },
+    const assignedKpis = (dto.kpis ?? []).filter((kpi) => kpi?.title?.trim());
+    if (assignedKpis.length) {
+      await this.prisma.goal.createMany({
+        data: assignedKpis.map((kpi) => ({
+          title: kpi.title.trim(),
+          description: kpi.description?.trim() || null,
+          targetValue: kpi.targetValue === undefined || kpi.targetValue === null ? null : Number(kpi.targetValue),
+          currentValue: 0,
+          unit: kpi.unit?.trim() || null,
+          dueDate: kpi.dueDate ? new Date(kpi.dueDate) : null,
+          scope: 'PERSONAL',
+          ownerId: user.id,
+        })),
       });
     }
 
@@ -158,7 +171,6 @@ export class EmployeesService {
         ...(dto.personalEmail !== undefined ? { personalEmail: dto.personalEmail } : {}),
         ...(dto.employmentType !== undefined ? { employmentType: dto.employmentType } : {}),
         ...(dto.salary !== undefined ? { salary: dto.salary } : {}),
-        ...(dto.kpiTarget !== undefined ? { kpiTarget: dto.kpiTarget } : {}),
         ...(dto.emergencyContact !== undefined ? { emergencyContact: dto.emergencyContact } : {}),
         ...(dto.hireDate !== undefined ? { hireDate: dto.hireDate ? new Date(dto.hireDate) : null } : {}),
         ...(dto.responsibilities !== undefined ? { responsibilities: dto.responsibilities } : {}),
@@ -238,7 +250,6 @@ export class EmployeesService {
       personalEmail: user.personalEmail,
       employmentType: user.employmentType,
       salary: user.salary ? Number(user.salary) : null,
-      kpiTarget: user.kpiTarget ? Number(user.kpiTarget) : null,
       emergencyContact: user.emergencyContact,
       hireDate: user.hireDate,
       avatarUrl: user.avatarUrl,
@@ -249,14 +260,4 @@ export class EmployeesService {
     };
   }
 
-  private currentPeriod() {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Africa/Douala',
-      year: 'numeric',
-      month: '2-digit',
-    }).formatToParts(new Date());
-    const year = parts.find((part) => part.type === 'year')?.value;
-    const month = parts.find((part) => part.type === 'month')?.value;
-    return `${year}-${month}`;
-  }
 }

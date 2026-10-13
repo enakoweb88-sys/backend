@@ -54,7 +54,6 @@ model User {
   hireDate             DateTime?
   personalEmail        String?
   salary               Decimal?              @db.Decimal(14, 2)
-  kpiTarget            Decimal?              @db.Decimal(5, 2)
   responsibilities     String?
   goalsText            String?
   activityLogs         ActivityLog[]
@@ -75,8 +74,6 @@ model User {
   sentMessages         Message[]             @relation("SentMessages")
   notifications        Notification[]
   performanceMetrics   PerformanceMetric[]
-  kpiScores            EmployeeKpiScore[]    @relation("KpiScoreEmployee")
-  reviewedKpiScores    EmployeeKpiScore[]    @relation("KpiScoreReviewer")
   refreshTokens        RefreshToken[]
   generatedReports     ReportFile[]          @relation("GeneratedReports")
   addedSubscriptions   Subscription[]        @relation("AddedSubscriptions")
@@ -93,26 +90,6 @@ model User {
   @@index([roleId])
   @@index([status])
   @@map("users")
-}
-
-model EmployeeKpiScore {
-  id           String   @id @default(cuid())
-  userId       String
-  period       String
-  score        Decimal  @db.Decimal(5, 2)
-  notes        String?
-  submittedAt  DateTime?
-  reviewedAt   DateTime?
-  reviewedById String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  employee     User     @relation("KpiScoreEmployee", fields: [userId], references: [id], onDelete: Cascade)
-  reviewedBy   User?    @relation("KpiScoreReviewer", fields: [reviewedById], references: [id])
-
-  @@unique([userId, period])
-  @@index([period])
-  @@index([reviewedById])
-  @@map("employee_kpi_scores")
 }
 
 model UserPreference {
