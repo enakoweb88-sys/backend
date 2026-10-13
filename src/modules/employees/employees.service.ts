@@ -78,6 +78,7 @@ export class EmployeesService {
         personalEmail: dto.personalEmail,
         employmentType: dto.employmentType,
         salary: dto.salary,
+        kpiTarget: dto.kpiTarget,
         emergencyContact: dto.emergencyContact,
         hireDate: dto.hireDate ? new Date(dto.hireDate) : null,
         responsibilities: dto.responsibilities,
@@ -93,6 +94,17 @@ export class EmployeesService {
       },
       include: { role: true, department: true, ledDepartments: true },
     });
+
+    if (dto.initialKpiScore !== undefined) {
+      await this.prisma.employeeKpiScore.create({
+        data: {
+          userId: user.id,
+          period: this.currentPeriod(),
+          score: dto.initialKpiScore,
+          notes: 'Initial KPI score set during employee profile creation.',
+        },
+      });
+    }
 
     // Send welcome onboarding email asynchronously (non-blocking for fast UI response)
     this.mail.sendWelcomeEmail({
@@ -146,6 +158,7 @@ export class EmployeesService {
         ...(dto.personalEmail !== undefined ? { personalEmail: dto.personalEmail } : {}),
         ...(dto.employmentType !== undefined ? { employmentType: dto.employmentType } : {}),
         ...(dto.salary !== undefined ? { salary: dto.salary } : {}),
+        ...(dto.kpiTarget !== undefined ? { kpiTarget: dto.kpiTarget } : {}),
         ...(dto.emergencyContact !== undefined ? { emergencyContact: dto.emergencyContact } : {}),
         ...(dto.hireDate !== undefined ? { hireDate: dto.hireDate ? new Date(dto.hireDate) : null } : {}),
         ...(dto.responsibilities !== undefined ? { responsibilities: dto.responsibilities } : {}),
@@ -225,6 +238,7 @@ export class EmployeesService {
       personalEmail: user.personalEmail,
       employmentType: user.employmentType,
       salary: user.salary ? Number(user.salary) : null,
+      kpiTarget: user.kpiTarget ? Number(user.kpiTarget) : null,
       emergencyContact: user.emergencyContact,
       hireDate: user.hireDate,
       avatarUrl: user.avatarUrl,
@@ -233,5 +247,16 @@ export class EmployeesService {
       ledDepartments: user.ledDepartments?.map((d: any) => d.name) || [],
       createdAt: user.createdAt,
     };
+  }
+
+  private currentPeriod() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Douala',
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    return `${year}-${month}`;
   }
 }
