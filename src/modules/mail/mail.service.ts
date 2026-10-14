@@ -870,7 +870,7 @@ export class MailService {
       subject: `E-NAKO CASH RECEIPT: Collection #${cleanColId} (${amountFormatted})`,
       html,
       senderType: 'CASH',
-      from: '"ENAKO Cash Desk" <cash@enakoos.com>',
+      from: '"ENAKO Cash Desk" <cash@mail.enakoos.com>',
       replyTo: 'cash@enakoos.com',
       attachments,
       tag: 'cash_collection_receipt',
@@ -879,7 +879,7 @@ export class MailService {
 
   /**
    * Sent to client when a field cash collection is marked COMPLETE / SETTLED.
-   * From: "ENAKO Cash Desk" <cash@enakoos.com> | Reply-To: cash@enakoos.com
+   * From: "ENAKO Cash Desk" <cash@mail.enakoos.com> | Reply-To: cash@enakoos.com
    */
   async sendCollectionSettledAlert(opts: {
     toEmail: string;
@@ -952,7 +952,7 @@ export class MailService {
       subject: `✔ E-NAKO SETTLEMENT CONFIRMATION: Collection #${cleanColId} Completed (${amountFormatted})`,
       html,
       senderType: 'CASH',
-      from: '"ENAKO Cash Desk" <cash@enakoos.com>',
+      from: '"ENAKO Cash Desk" <cash@mail.enakoos.com>',
       replyTo: 'cash@enakoos.com',
       attachments,
       tag: 'cash_collection_settled',
