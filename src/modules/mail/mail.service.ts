@@ -258,10 +258,6 @@ export class MailService {
         text: 'You will receive an automated notification as soon as compliance review is complete. No further action is required from you at this time.',
         variant: 'info',
       },
-      ctaButton: {
-        label: 'Check Verification Status',
-        url: 'https://kyc.enakoos.com',
-      },
     });
 
     return this.sendEmail({
@@ -293,11 +289,6 @@ export class MailService {
         { label: 'Compliance Status', value: 'Verified & Approved', isHighlight: true },
         { label: 'Account Tier', value: 'Full Operational Access' },
       ],
-      ctaButton: {
-        label: 'Access Your Account',
-        url: 'https://enakoos.com',
-        color: '#16a34a',
-      },
     });
 
     return this.sendEmail({
@@ -329,11 +320,6 @@ export class MailService {
         title: 'Reason for Status Update',
         text: reason || 'Uploaded identification documents were unclear or expired. Please upload a clear, valid National ID Card (CNI) or passport.',
         variant: 'danger',
-      },
-      ctaButton: {
-        label: 'Update Your Documents',
-        url: 'https://kyc.enakoos.com',
-        color: '#dc2626',
       },
     });
 
