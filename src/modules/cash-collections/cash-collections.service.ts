@@ -253,6 +253,16 @@ export class CashCollectionsService {
       const users = await this.prisma.user.findMany({
         where: {
           status: 'ACTIVE',
+          AND: [
+            { email: { not: 'ceo@enako.com' } },
+            { role: { name: { notIn: ['CEO', 'MANAGER'] } } },
+            {
+              OR: [
+                { title: { contains: 'Collector', mode: 'insensitive' } },
+                { responsibilities: { contains: 'terminalId', mode: 'insensitive' } },
+              ],
+            },
+          ],
         },
         select: {
           id: true,
@@ -288,7 +298,7 @@ export class CashCollectionsService {
           email: u.email,
           phone: u.phone || meta.phone || '',
           branch: u.address || meta.branch || 'Douala Main Hub',
-          role: meta.role || u.title || (u.role?.name === 'CEO' ? 'CEO / Senior Manager' : 'Field Cash Collector'),
+          role: meta.role || u.title || 'Field Cash Collector',
           terminalId: meta.terminalId || `TRM-${u.id.slice(-4).toUpperCase()}`,
           password: meta.password || '123456',
           status: 'ACTIVE',
@@ -298,6 +308,73 @@ export class CashCollectionsService {
     } catch (err) {
       console.error('Error fetching collectors:', err);
       return [];
+    }
+  }
+
+  async deleteCollector(id: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id },
+        include: { role: true },
+      });
+      if (!user) {
+        return { success: true, message: 'Collector not found or already deleted' };
+      }
+      if (user.role?.name === 'CEO' || user.email === 'ceo@enako.com') {
+        throw new Error('Cannot delete administrative executive account');
+      }
+
+      await this.prisma.cashCollection.deleteMany({
+        where: { collectorId: id },
+      });
+
+      await this.prisma.user.delete({
+        where: { id },
+      });
+
+      return { success: true, message: 'Collector and their collection history deleted successfully' };
+    } catch (err) {
+      console.error('Error deleting collector:', err);
+      throw err;
+    }
+  }
+
+  async deleteAllCollectors() {
+    try {
+      const collectors = await this.prisma.user.findMany({
+        where: {
+          AND: [
+            { email: { not: 'ceo@enako.com' } },
+            { role: { name: { notIn: ['CEO', 'MANAGER'] } } },
+            {
+              OR: [
+                { title: { contains: 'Collector', mode: 'insensitive' } },
+                { responsibilities: { contains: 'terminalId', mode: 'insensitive' } },
+              ],
+            },
+          ],
+        },
+        select: { id: true },
+      });
+
+      const ids = collectors.map((c) => c.id);
+
+      await this.prisma.cashCollection.deleteMany();
+
+      if (ids.length > 0) {
+        await this.prisma.user.deleteMany({
+          where: { id: { in: ids } },
+        });
+      }
+
+      return {
+        success: true,
+        count: ids.length,
+        message: `Deleted ${ids.length} collectors and purged all collection history`,
+      };
+    } catch (err) {
+      console.error('Error deleting all collectors:', err);
+      throw err;
     }
   }
 

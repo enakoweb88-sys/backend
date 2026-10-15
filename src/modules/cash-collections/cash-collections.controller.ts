@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -54,6 +55,16 @@ export class CashCollectionsController {
   @Post('collectors')
   createCollector(@Body() dto: any) {
     return this.cashCollections.createCollector(dto);
+  }
+
+  @Delete('collectors/:id')
+  deleteCollector(@Param('id') id: string) {
+    return this.cashCollections.deleteCollector(id);
+  }
+
+  @Delete('collectors')
+  deleteAllCollectors() {
+    return this.cashCollections.deleteAllCollectors();
   }
 
   @Get(':id')
