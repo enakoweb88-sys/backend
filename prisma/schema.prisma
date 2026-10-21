@@ -123,6 +123,24 @@ model UserSession {
   @@map("user_sessions")
 }
 
+model CashClient {
+  id                 String   @id
+  name               String
+  address            String
+  region             String   @default("Cameroon")
+  phone              String?
+  email              String?
+  outstandingBalance Decimal  @default(0) @db.Decimal(14, 2)
+  lastVisit          String   @default("Never")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([name])
+  @@index([phone])
+  @@index([email])
+  @@map("cash_clients")
+}
+
 model RefreshToken {
   id        String    @id @default(cuid())
   tokenHash String

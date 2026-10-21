@@ -52,6 +52,16 @@ export class CashCollectionsController {
     return this.cashCollections.listCollectors();
   }
 
+  @Get('clients')
+  listClients() {
+    return this.cashCollections.listClients();
+  }
+
+  @Post('clients')
+  createClient(@Body() dto: any) {
+    return this.cashCollections.createClient(dto);
+  }
+
   @Post('collectors')
   createCollector(@Body() dto: any) {
     return this.cashCollections.createCollector(dto);

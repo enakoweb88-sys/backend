@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { CreateCashCollectionDto, QueryDto, UpdateCashCollectionStatusDto } from '../../common/dtos';
@@ -309,6 +309,55 @@ export class CashCollectionsService {
       console.error('Error fetching collectors:', err);
       return [];
     }
+  }
+
+  async listClients() {
+    const clients = await this.prisma.cashClient.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return clients.map((client) => ({
+      ...client,
+      outstandingBalance: Number(client.outstandingBalance),
+    }));
+  }
+
+  async createClient(data: {
+    id: string;
+    name: string;
+    address: string;
+    region?: string;
+    phone?: string;
+    email?: string;
+    outstandingBalance?: number;
+    lastVisit?: string;
+  }) {
+    const id = data.id?.trim();
+    const name = data.name?.trim();
+    const address = data.address?.trim();
+    if (!id || !name || !address) {
+      throw new BadRequestException('Client ID, name, and address are required');
+    }
+
+    const client = await this.prisma.cashClient.upsert({
+      where: { id },
+      create: {
+        id,
+        name,
+        address,
+        region: data.region?.trim() || 'Cameroon',
+        phone: data.phone?.trim() || null,
+        email: data.email?.trim().toLowerCase() || null,
+        outstandingBalance: data.outstandingBalance || 0,
+        lastVisit: data.lastVisit || 'Never',
+      },
+      update: {},
+    });
+
+    return {
+      ...client,
+      outstandingBalance: Number(client.outstandingBalance),
+    };
   }
 
   async deleteCollector(id: string) {
