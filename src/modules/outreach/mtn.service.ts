@@ -4,18 +4,18 @@ import axios from 'axios';
 
 interface RequestToPayProps {
   phone: string;
-  amount: number-string;
-currency ?: string;
-externalId: string;
-payerMessage: string;
-payeeMessage: string;
+  amount: number | string;
+  currency?: string;
+  externalId: string;
+  payerMessage: string;
+  payeeMessage: string;
 }
 
 interface PaymentStatusProps {
   referenceId: string;
-  status: 'CREATED'-'PENDING' - 'SUCCESSFUL' - 'FAILED';
-financialTransactionId: string;
-reason ?: string;
+  status: 'CREATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+  financialTransactionId: string;
+  reason?: string;
 }
 
 @Injectable()
@@ -45,7 +45,7 @@ export class MtnService {
   async getAuthToken(): Promise<{ token?: string; error?: string }> {
     try {
       this.logger.log(`Attempting MTN token fetch: baseUrl=${this.baseUrl}, apiUser=${this.apiUser ? '***SET***' : 'EMPTY'}, apiKey=${this.apiKey ? '***SET***' : 'EMPTY'}, primaryKey=${this.primaryKey ? '***SET***' : 'EMPTY'}`);
-
+      
       const response = await axios.post(
         `${this.baseUrl}/collection/token/`,
         {},
@@ -82,7 +82,7 @@ export class MtnService {
       if (formattedPhone.length === 9 && (formattedPhone.startsWith('67') || formattedPhone.startsWith('65') || formattedPhone.startsWith('68') || formattedPhone.startsWith('69'))) {
         formattedPhone = '237' + formattedPhone;
       }
-
+      
       const response = await axios.post(
         `${this.baseUrl}/collection/v1_0/requesttopay`,
         {
@@ -114,7 +114,7 @@ export class MtnService {
     }
   }
 
-  async checkPaymentStatus(uuid: string, token: string): Promise<PaymentStatusProps-null > {
+  async checkPaymentStatus(uuid: string, token: string): Promise<PaymentStatusProps | null> {
     try {
       const response = await axios.get(
         `${this.baseUrl}/collection/v1_0/requesttopay/${uuid}`,
@@ -136,7 +136,7 @@ export class MtnService {
         financialTransactionId: data.financialTransactionId,
         reason: data.reason?.message
       };
-    } catch(error: any) {
+    } catch (error: any) {
       this.logger.error(`Error checking payment status for ${uuid}:`, error.response?.data || error.message);
       return null;
     }

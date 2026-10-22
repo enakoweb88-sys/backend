@@ -11,14 +11,14 @@ export interface EmailTemplateConfig {
   calloutNote?: {
     title?: string;
     text: string;
-    variant?: 'info'-'success' - 'warning' - 'danger';
+    variant?: 'info' | 'success' | 'warning' | 'danger';
   };
-ctaButton ?: {
-  label: string;
-  url: string;
-  color?: string;
-};
-footerNote ?: string;
+  ctaButton?: {
+    label: string;
+    url: string;
+    color?: string;
+  };
+  footerNote?: string;
 }
 
 /**
@@ -116,16 +116,17 @@ export function buildBrandedEmail(config: EmailTemplateConfig): string {
               ${headerSubtitle}
             </div>
           </td>
-          ${config.badge
-      ? `
+          ${
+            config.badge
+              ? `
           <td style="text-align: right; vertical-align: middle;">
             <span style="display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: ${badgeColor}; border: 1px solid ${badgeColor}; padding: 3px 10px; border-radius: 20px;">
               ${config.badge}
             </span>
           </td>
           `
-      : ''
-    }
+              : ''
+          }
         </tr>
       </table>
     </div>
