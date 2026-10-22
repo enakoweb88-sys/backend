@@ -15,7 +15,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly securityService: SecurityService,
-  ) {}
+  ) { }
 
   async login(dto: LoginDto, ip?: string, device?: string) {
     const user = await this.prisma.user.findUnique({
@@ -28,7 +28,7 @@ export class AuthService {
         email: dto.email,
         ip,
         reason: 'Attempted login to non-existent or inactive user account.',
-      }).catch(() => {});
+      }).catch(() => { });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -37,7 +37,7 @@ export class AuthService {
         email: dto.email,
         ip,
         reason: `Attempted login with selected portal ${dto.role}, but user is assigned to ${user.role.name}. Proceeding with assigned role.`,
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
@@ -46,7 +46,7 @@ export class AuthService {
         email: dto.email,
         ip,
         reason: 'Incorrect password entered during login attempt.',
-      }).catch(() => {});
+      }).catch(() => { });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -103,7 +103,7 @@ export class AuthService {
         email: tokenRecord.user?.email,
         ip,
         reason: `Session terminated due to IP address change from ${tokenRecord.ipAddress} to ${ip}.`,
-      }).catch(() => {});
+      }).catch(() => { });
 
       throw new UnauthorizedException('Session terminated due to IP address change. Please log in again.');
     }
@@ -192,16 +192,16 @@ export class AuthService {
     email: string;
     fullName: string;
     role: { name: string };
-    department?: { name: string } | null;
-    ledDepartments?: { name: string }[];
+    department?: { name: string }-null;
+ledDepartments ?: { name: string }[];
   }) {
-    return {
-      id: user.id,
-      email: user.email,
-      fullName: user.fullName,
-      role: user.role.name,
-      department: user.department?.name ?? null,
-      ledDepartments: user.ledDepartments?.map(d => d.name) || [],
-    };
-  }
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role.name,
+    department: user.department?.name ?? null,
+    ledDepartments: user.ledDepartments?.map(d => d.name) || [],
+  };
+}
 }

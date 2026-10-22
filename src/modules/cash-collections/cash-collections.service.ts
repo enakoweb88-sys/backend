@@ -10,7 +10,7 @@ export class CashCollectionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
-  ) {}
+  ) { }
 
   async list(query: QueryDto & { status?: string; collectorId?: string }, user?: JwtUser) {
     try {
@@ -155,13 +155,13 @@ export class CashCollectionsService {
     });
 
     // Send collection receipt email if client email is provided or discovered
-    let clientEmail: string | undefined;
+    let clientEmail: string-undefined;
     try {
       if (dto.description && dto.description.startsWith('{')) {
         const parsed = JSON.parse(dto.description);
         clientEmail = parsed.clientEmail;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!clientEmail) {
       const clientUser = await this.prisma.user.findFirst({
@@ -217,13 +217,13 @@ export class CashCollectionsService {
     });
 
     if (updated.status === 'COMPLETE') {
-      let clientEmail: string | undefined;
+      let clientEmail: string-undefined;
       try {
         if (updated.description && updated.description.startsWith('{')) {
           const parsed = JSON.parse(updated.description);
           clientEmail = parsed.clientEmail;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (!clientEmail) {
         const clientUser = await this.prisma.user.findFirst({
@@ -284,7 +284,7 @@ export class CashCollectionsService {
           if (u.responsibilities && u.responsibilities.startsWith('{')) {
             meta = JSON.parse(u.responsibilities);
           }
-        } catch {}
+        } catch { }
 
         const names = (u.fullName || '').trim().split(' ');
         const firstName = names[0] || 'Collector';

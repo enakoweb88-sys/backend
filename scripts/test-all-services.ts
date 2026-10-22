@@ -132,7 +132,7 @@ async function sendAllTestEmails() {
   results.push({
     service: 'Onboarding & HR',
     from: EMAIL_SENDERS.NOTIFICATIONS,
-    subject: 'Welcome to ENAKO, Enako | Onboarding Documentation',
+    subject: 'Welcome to ENAKO, Enako-Onboarding Documentation',
     success: welcomeAlert.success,
     id: welcomeAlert.messageId,
     error: welcomeAlert.error,

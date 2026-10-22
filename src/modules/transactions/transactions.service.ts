@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async list(query: any) {
     const where: any = {};
@@ -16,14 +16,14 @@ export class TransactionsService {
         { description: { contains: query.search, mode: 'insensitive' } },
       ];
     }
-    
+
     if (query.status && query.status !== 'All Status') {
       if (query.status === 'Completed') where.status = 'SETTLED';
       else if (query.status === 'Pending') where.status = 'PENDING';
       else if (query.status === 'Failed') where.status = 'FAILED';
       else where.status = query.status.toUpperCase();
     }
-    
+
     if (query.type && query.type !== 'All Types') {
       if (query.type === 'Income') {
         where.type = { in: ['Receive', 'CREDIT'] };
@@ -44,11 +44,11 @@ export class TransactionsService {
     if (query.dateRange && query.dateRange !== 'All Dates' && query.dateRange !== 'Custom Range...') {
       const now = new Date();
       if (query.dateRange === 'Today') {
-        const start = new Date(now.setHours(0,0,0,0));
+        const start = new Date(now.setHours(0, 0, 0, 0));
         where.createdAt = { gte: start };
       } else if (query.dateRange === 'This Week') {
         const start = new Date(now.setDate(now.getDate() - now.getDay()));
-        start.setHours(0,0,0,0);
+        start.setHours(0, 0, 0, 0);
         where.createdAt = { gte: start };
       } else if (query.dateRange === 'This Month') {
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -97,9 +97,9 @@ export class TransactionsService {
 
     const volumeData = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
       const vol = allTransactions.filter(tx => {
-         const d = new Date(tx.createdAt).getDay();
-         const adj = d === 0 ? 6 : d - 1;
-         return adj === idx;
+        const d = new Date(tx.createdAt).getDay();
+        const adj = d === 0 ? 6 : d - 1;
+        return adj === idx;
       }).reduce((sum, tx: any) => sum + Number(tx.amountInXaf ?? tx.amount), 0);
       return { name: day, volume: vol };
     });
@@ -132,7 +132,7 @@ export class TransactionsService {
         amount,
         percent: totalRev > 0 ? Math.round((amount / totalRev) * 100) : 0
       };
-    }).filter(s => s.amount > 0).sort((a,b) => b.amount - a.amount);
+    }).filter(s => s.amount > 0).sort((a, b) => b.amount - a.amount);
 
     const summary = {
       totalVolume: totalRev,
@@ -141,13 +141,13 @@ export class TransactionsService {
       avgValue: allTransactions.length > 0 ? Math.round(totalRev / allTransactions.length) : 0
     };
 
-    return { 
-      items, 
-      totals: totalsRaw, 
-      volumeData, 
-      channelData: channelData.length > 0 ? channelData : [{ name: 'None', value: 1 }], 
-      topRevenueSources, 
-      failedTransactions, 
+    return {
+      items,
+      totals: totalsRaw,
+      volumeData,
+      channelData: channelData.length > 0 ? channelData : [{ name: 'None', value: 1 }],
+      topRevenueSources,
+      failedTransactions,
       recentActivity,
       summary,
       floatManagement: floatData
@@ -204,75 +204,75 @@ export class TransactionsService {
     return updated;
   }
 
-  async updateFloat(channel: string, amount: number, charges: number, direction: 'in' | 'out') {
-    const float = await this.prisma.floatAccount.upsert({
-      where: { channel },
-      create: { channel, balance: 0, totalIn: 0, totalOut: 0 },
-      update: {}
-    });
+  async updateFloat(channel: string, amount: number, charges: number, direction: 'in'-'out') {
+  const float = await this.prisma.floatAccount.upsert({
+    where: { channel },
+    create: { channel, balance: 0, totalIn: 0, totalOut: 0 },
+    update: {}
+  });
 
-    if (direction === 'in') {
-      await this.prisma.floatAccount.update({
-        where: { id: float.id },
-        data: {
-          balance: { increment: amount },
-          totalIn: { increment: amount }
-        }
-      });
-    } else {
-      await this.prisma.floatAccount.update({
-        where: { id: float.id },
-        data: {
-          balance: { decrement: amount + charges },
-          totalOut: { increment: amount + charges }
-        }
-      });
-    }
+  if (direction === 'in') {
+    await this.prisma.floatAccount.update({
+      where: { id: float.id },
+      data: {
+        balance: { increment: amount },
+        totalIn: { increment: amount }
+      }
+    });
+  } else {
+    await this.prisma.floatAccount.update({
+      where: { id: float.id },
+      data: {
+        balance: { decrement: amount + charges },
+        totalOut: { increment: amount + charges }
+      }
+    });
   }
+}
 
   async setFloatBalance(channel: string, balance: number) {
-    return this.prisma.floatAccount.upsert({
-      where: { channel },
-      create: { channel, balance, totalIn: 0, totalOut: 0 },
-      update: { balance }
-    });
-  }
+  return this.prisma.floatAccount.upsert({
+    where: { channel },
+    create: { channel, balance, totalIn: 0, totalOut: 0 },
+    update: { balance }
+  });
+}
 
   async getExchangeRates() {
-    try {
-      return await this.prisma.exchangeRate.findMany({
-        orderBy: { code: 'asc' },
-      });
-    } catch (e) {
-      console.error('Error fetching exchange rates from database:', e);
-      return [];
-    }
+  try {
+    return await this.prisma.exchangeRate.findMany({
+      orderBy: { code: 'asc' },
+    });
+  } catch (e) {
+    console.error('Error fetching exchange rates from database:', e);
+    return [];
   }
+}
 
   async saveExchangeRates(dto: { rates: Array<{ code: string; name: string; flag?: string; buyingRate?: string; sellingRate?: string; change24h?: number }> }) {
-    const list = dto.rates || [];
-    const results = [];
-    for (const r of list) {
-      const saved = await this.prisma.exchangeRate.upsert({
-        where: { code: r.code },
-        create: {
-          code: r.code,
-          name: r.name || r.code,
-          flag: r.flag || '',
-          buyingRate: r.buyingRate || '',
-          sellingRate: r.sellingRate || '',
-          change24h: r.change24h ?? 0,
-        },
-        update: {
-          buyingRate: r.buyingRate !== undefined ? r.buyingRate : undefined,
-          sellingRate: r.sellingRate !== undefined ? r.sellingRate : undefined,
-          change24h: r.change24h !== undefined ? r.change24h : undefined,
-          flag: r.flag || undefined,
-          name: r.name || undefined,
-        },
-      });
-      results.push(saved);
-    }
-    return results;
+  const list = dto.rates || [];
+  const results = [];
+  for (const r of list) {
+    const saved = await this.prisma.exchangeRate.upsert({
+      where: { code: r.code },
+      create: {
+        code: r.code,
+        name: r.name || r.code,
+        flag: r.flag || '',
+        buyingRate: r.buyingRate || '',
+        sellingRate: r.sellingRate || '',
+        change24h: r.change24h ?? 0,
+      },
+      update: {
+        buyingRate: r.buyingRate !== undefined ? r.buyingRate : undefined,
+        sellingRate: r.sellingRate !== undefined ? r.sellingRate : undefined,
+        change24h: r.change24h !== undefined ? r.change24h : undefined,
+        flag: r.flag || undefined,
+        name: r.name || undefined,
+      },
+    });
+    results.push(saved);
   }
+  return results;
+}
 }

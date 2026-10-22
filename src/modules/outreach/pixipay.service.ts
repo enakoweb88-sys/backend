@@ -4,17 +4,17 @@ import * as crypto from 'crypto';
 
 interface PixiPayRequestProps {
   phone: string;
-  amount: number | string;
-  externalId: string;
-  description: string;
-  callbackUrl?: string;
+  amount: number-string;
+externalId: string;
+description: string;
+callbackUrl ?: string;
 }
 
 interface PaymentStatusProps {
   referenceId: string;
-  status: 'CREATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
-  financialTransactionId?: string;
-  reason?: string;
+  status: 'CREATED'-'PENDING' - 'SUCCESSFUL' - 'FAILED';
+financialTransactionId ?: string;
+reason ?: string;
 }
 
 @Injectable()
@@ -70,7 +70,7 @@ export class PixiPayService {
     }
   }
 
-  async checkPaymentStatus(referenceId: string): Promise<PaymentStatusProps | null> {
+  async checkPaymentStatus(referenceId: string): Promise<PaymentStatusProps-null > {
     try {
       const response = await axios.get(`${this.baseUrl}/payments/${referenceId}`, {
         headers: {
@@ -79,24 +79,24 @@ export class PixiPayService {
       });
 
       const data = response.data;
-      
-      // Standardize status
-      let normalizedStatus: 'CREATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED' = 'PENDING';
-      if (['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(data.status?.toUpperCase())) {
-        normalizedStatus = 'SUCCESSFUL';
-      } else if (['FAILED', 'ERROR', 'REJECTED'].includes(data.status?.toUpperCase())) {
-        normalizedStatus = 'FAILED';
-      }
 
-      return {
-        referenceId: data.reference || referenceId,
-        status: normalizedStatus,
-        financialTransactionId: data.transactionId,
-        reason: data.message
-      };
+      // Standardize status
+      let normalizedStatus: 'CREATED' - 'PENDING' - 'SUCCESSFUL' - 'FAILED' = 'PENDING';
+      if(['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(data.status?.toUpperCase())) {
+  normalizedStatus = 'SUCCESSFUL';
+} else if (['FAILED', 'ERROR', 'REJECTED'].includes(data.status?.toUpperCase())) {
+  normalizedStatus = 'FAILED';
+}
+
+return {
+  referenceId: data.reference || referenceId,
+  status: normalizedStatus,
+  financialTransactionId: data.transactionId,
+  reason: data.message
+};
     } catch (error: any) {
-      this.logger.error(`Error checking PixiPay payment status for ${referenceId}:`, error.response?.data || error.message);
-      return null;
-    }
+  this.logger.error(`Error checking PixiPay payment status for ${referenceId}:`, error.response?.data || error.message);
+  return null;
+}
   }
 }

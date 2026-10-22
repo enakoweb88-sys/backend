@@ -11,846 +11,846 @@ export class OutreachService {
     private readonly prisma: PrismaService,
     private readonly mtnService: MtnService,
     private readonly pixiPayService: PixiPayService
-  ) {}
+  ) { }
 
-  private async uploadToSupabase(base64Data: string, prefix: string): Promise<string | null> {
-    if (!base64Data || !base64Data.startsWith('data:')) return null;
-    try {
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-      
-      if (supabaseUrl && supabaseKey) {
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        await supabase.storage.createBucket('outreach', { public: true }).catch(() => {});
-        
-        // Extract content type and base64 string
-        const match = base64Data.match(/^data:([a-zA-Z0-9-+\/]+);base64,(.+)$/);
-        if (match && match.length === 3) {
-          const contentType = match[1];
-          const buffer = Buffer.from(match[2], 'base64');
-          const ext = contentType.split('/')[1] || 'pdf';
-          const fileName = `${prefix}-${Date.now()}.${ext}`;
-          
-          const { error } = await supabase.storage.from('outreach').upload(fileName, buffer, {
-            contentType,
-            upsert: true
-          });
-          
-          if (!error) {
-            const { data } = supabase.storage.from('outreach').getPublicUrl(fileName);
-            return data.publicUrl;
-          } else {
-            console.error('Supabase upload error:', error);
-          }
-        }
+  private async uploadToSupabase(base64Data: string, prefix: string): Promise<string-null > {
+    if(!base64Data || !base64Data.startsWith('data:')) return null;
+try {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    await supabase.storage.createBucket('outreach', { public: true }).catch(() => { });
+
+    // Extract content type and base64 string
+    const match = base64Data.match(/^data:([a-zA-Z0-9-+\/]+);base64,(.+)$/);
+    if (match && match.length === 3) {
+      const contentType = match[1];
+      const buffer = Buffer.from(match[2], 'base64');
+      const ext = contentType.split('/')[1] || 'pdf';
+      const fileName = `${prefix}-${Date.now()}.${ext}`;
+
+      const { error } = await supabase.storage.from('outreach').upload(fileName, buffer, {
+        contentType,
+        upsert: true
+      });
+
+      if (!error) {
+        const { data } = supabase.storage.from('outreach').getPublicUrl(fileName);
+        return data.publicUrl;
+      } else {
+        console.error('Supabase upload error:', error);
       }
-    } catch (e) {
-      console.error('Failed to upload file to supabase', e);
     }
-    return null;
+  }
+} catch (e) {
+  console.error('Failed to upload file to supabase', e);
+}
+return null;
   }
 
   async createDonation(data: any) {
-    const documentUrls: string[] = [];
-    if (data.documents && Array.isArray(data.documents)) {
-      for (const docBase64 of data.documents) {
-        const url = await this.uploadToSupabase(docBase64, 'donation-receipt');
-        if (url) documentUrls.push(url);
-      }
-    } else if (data.documentBase64) {
-      // Single file upload fallback
-      const url = await this.uploadToSupabase(data.documentBase64, 'donation-receipt');
+  const documentUrls: string[] = [];
+  if (data.documents && Array.isArray(data.documents)) {
+    for (const docBase64 of data.documents) {
+      const url = await this.uploadToSupabase(docBase64, 'donation-receipt');
       if (url) documentUrls.push(url);
     }
+  } else if (data.documentBase64) {
+    // Single file upload fallback
+    const url = await this.uploadToSupabase(data.documentBase64, 'donation-receipt');
+    if (url) documentUrls.push(url);
+  }
 
-    const { documents, documentBase64, phone, ...cleanData } = data;
-    
-    // Create the donation record with PENDING status initially
-    const donation = await this.prisma.donation.create({
-      data: {
-        ...cleanData,
-        phone,
-        documents: documentUrls,
-        status: cleanData.method === 'BANK' ? 'PENDING' : 'PENDING'
-      }
+  const { documents, documentBase64, phone, ...cleanData } = data;
+
+  // Create the donation record with PENDING status initially
+  const donation = await this.prisma.donation.create({
+    data: {
+      ...cleanData,
+      phone,
+      documents: documentUrls,
+      status: cleanData.method === 'BANK' ? 'PENDING' : 'PENDING'
+    }
+  });
+
+  if (cleanData.method === 'MTN') {
+    const response = await this.mtnService.requestToPay({
+      amount: cleanData.amount,
+      currency: cleanData.currency,
+      externalId: donation.id,
+      phone: phone || '', // Ensure it has 237 prefix usually
+      payerMessage: `Donation for ${cleanData.sector}`,
+      payeeMessage: 'Thank you for your donation'
     });
 
-    if (cleanData.method === 'MTN') {
-      const response = await this.mtnService.requestToPay({
-        amount: cleanData.amount,
-        currency: cleanData.currency,
-        externalId: donation.id,
-        phone: phone || '', // Ensure it has 237 prefix usually
-        payerMessage: `Donation for ${cleanData.sector}`,
-        payeeMessage: 'Thank you for your donation'
-      });
-
-      if (response.error || !response.uuid) {
-        // Mark as failed
-        console.error('MTN Payment initiation failed:', response.error);
-        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new BadRequestException(response.error || 'Failed to initiate MTN Payment');
-      }
-
-      return {
-        donation,
-        paymentToken: response.token,
-        paymentUuid: response.uuid,
-        status: 'PENDING'
-      };
-    } else if (cleanData.method === 'ORANGE') {
-      const webhookUrl = process.env.WEBHOOK_BASE_URL 
-        ? `${process.env.WEBHOOK_BASE_URL}/outreach/donations/webhook/orange` 
-        : undefined;
-      
-      const response = await this.pixiPayService.requestToPay({
-        amount: cleanData.amount,
-        phone: phone || '',
-        externalId: donation.id,
-        description: `Donation for ${cleanData.sector}`,
-        callbackUrl: webhookUrl
-      });
-
-      if (response.error || !response.uuid) {
-        console.error('PixiPay Payment initiation failed:', response.error);
-        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new BadRequestException(response.error || 'Failed to initiate Orange Money Payment');
-      }
-
-      return {
-        donation,
-        paymentUuid: response.uuid,
-        status: 'PENDING'
-      };
+    if (response.error || !response.uuid) {
+      // Mark as failed
+      console.error('MTN Payment initiation failed:', response.error);
+      await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
+      throw new BadRequestException(response.error || 'Failed to initiate MTN Payment');
     }
 
-    // For Bank transfer, we can just return it as pending or completed based on your flow
     return {
       donation,
-      status: 'PENDING' // They will contact via email
+      paymentToken: response.token,
+      paymentUuid: response.uuid,
+      status: 'PENDING'
+    };
+  } else if (cleanData.method === 'ORANGE') {
+    const webhookUrl = process.env.WEBHOOK_BASE_URL
+      ? `${process.env.WEBHOOK_BASE_URL}/outreach/donations/webhook/orange`
+      : undefined;
+
+    const response = await this.pixiPayService.requestToPay({
+      amount: cleanData.amount,
+      phone: phone || '',
+      externalId: donation.id,
+      description: `Donation for ${cleanData.sector}`,
+      callbackUrl: webhookUrl
+    });
+
+    if (response.error || !response.uuid) {
+      console.error('PixiPay Payment initiation failed:', response.error);
+      await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
+      throw new BadRequestException(response.error || 'Failed to initiate Orange Money Payment');
+    }
+
+    return {
+      donation,
+      paymentUuid: response.uuid,
+      status: 'PENDING'
     };
   }
 
-  async getDonationStatus(uuid: string, token: string | undefined, donationId: string) {
-    const donation = await this.prisma.donation.findUnique({ where: { id: donationId } });
-    if (!donation) return { status: 'UNKNOWN' };
+  // For Bank transfer, we can just return it as pending or completed based on your flow
+  return {
+    donation,
+    status: 'PENDING' // They will contact via email
+  };
+}
 
-    let result: any = null;
-    
-    if (donation.method === 'MTN') {
-      result = await this.mtnService.checkPaymentStatus(uuid, token || '');
-    } else if (donation.method === 'ORANGE') {
-      result = await this.pixiPayService.checkPaymentStatus(uuid);
-    }
+  async getDonationStatus(uuid: string, token: string - undefined, donationId: string) {
+  const donation = await this.prisma.donation.findUnique({ where: { id: donationId } });
+  if (!donation) return { status: 'UNKNOWN' };
 
-    if (!result) {
-      return { status: 'UNKNOWN' };
-    }
+  let result: any = null;
 
-    const moMoStatus = result.status;
-    
-    if (moMoStatus === 'SUCCESSFUL') {
-      await this.prisma.donation.update({
-        where: { id: donationId },
-        data: { status: 'SETTLED' }
-      });
-      return { status: 'SETTLED' };
-    } else if (moMoStatus === 'FAILED') {
-      await this.prisma.donation.update({
-        where: { id: donationId },
-        data: { status: 'FAILED' }
-      });
-      return { status: 'FAILED', reason: result.reason || 'Payment failed' };
-    }
-
-    return { status: 'PENDING' };
+  if (donation.method === 'MTN') {
+    result = await this.mtnService.checkPaymentStatus(uuid, token || '');
+  } else if (donation.method === 'ORANGE') {
+    result = await this.pixiPayService.checkPaymentStatus(uuid);
   }
+
+  if (!result) {
+    return { status: 'UNKNOWN' };
+  }
+
+  const moMoStatus = result.status;
+
+  if (moMoStatus === 'SUCCESSFUL') {
+    await this.prisma.donation.update({
+      where: { id: donationId },
+      data: { status: 'SETTLED' }
+    });
+    return { status: 'SETTLED' };
+  } else if (moMoStatus === 'FAILED') {
+    await this.prisma.donation.update({
+      where: { id: donationId },
+      data: { status: 'FAILED' }
+    });
+    return { status: 'FAILED', reason: result.reason || 'Payment failed' };
+  }
+
+  return { status: 'PENDING' };
+}
 
   async globalSearch(query: string) {
-    if (!query || query.trim() === '') {
-      return [];
-    }
-    
-    const searchStr = query.trim();
-    
-    const [projects, events, blogs, applications, stats] = await Promise.all([
-      this.prisma.communityProject.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchStr, mode: 'insensitive' } },
-            { description: { contains: searchStr, mode: 'insensitive' } },
-            { communitySlug: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 5
-      }),
-      this.prisma.outreachEvent.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchStr, mode: 'insensitive' } },
-            { description: { contains: searchStr, mode: 'insensitive' } },
-            { titleFr: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 5
-      }),
-      this.prisma.blogPost.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchStr, mode: 'insensitive' } },
-            { content: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 5
-      }),
-      this.prisma.outreachApplication.findMany({
-        where: {
-          OR: [
-            { applicantName: { contains: searchStr, mode: 'insensitive' } },
-            { email: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 5
-      }),
-      this.prisma.publicImpactStat.findMany({
-        where: {
-          OR: [
-            { label: { contains: searchStr, mode: 'insensitive' } },
-            { value: { contains: searchStr, mode: 'insensitive' } }
-          ]
-        },
-        take: 5
-      })
-    ]);
-
-    const results = [
-      ...projects.map(p => ({
-        id: p.id,
-        type: 'COMMUNITY PROJECT',
-        title: p.title,
-        subtitle: `Community: ${p.communitySlug}`,
-        link: '/app/outreach/projects'
-      })),
-      ...events.map(e => ({
-        id: e.id,
-        type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT',
-        title: e.title,
-        subtitle: `Type: ${e.type}`,
-        link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events'
-      })),
-      ...blogs.map(b => ({
-        id: b.id,
-        type: 'BLOG POST',
-        title: b.title,
-        subtitle: `Status: ${b.status}`,
-        link: '/app/outreach/cms'
-      })),
-      ...applications.map(a => ({
-        id: a.id,
-        type: 'APPLICATION',
-        title: a.applicantName,
-        subtitle: `Track: ${a.type}`,
-        link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications'
-      })),
-      ...stats.map(s => ({
-        id: s.id,
-        type: 'IMPACT STAT',
-        title: s.label,
-        subtitle: `Value: ${s.value}`,
-        link: '/app/outreach/stats'
-      }))
-    ];
-
-    return results;
+  if (!query || query.trim() === '') {
+    return [];
   }
+
+  const searchStr = query.trim();
+
+  const [projects, events, blogs, applications, stats] = await Promise.all([
+    this.prisma.communityProject.findMany({
+      where: {
+        OR: [
+          { title: { contains: searchStr, mode: 'insensitive' } },
+          { description: { contains: searchStr, mode: 'insensitive' } },
+          { communitySlug: { contains: searchStr, mode: 'insensitive' } }
+        ]
+      },
+      take: 5
+    }),
+    this.prisma.outreachEvent.findMany({
+      where: {
+        OR: [
+          { title: { contains: searchStr, mode: 'insensitive' } },
+          { description: { contains: searchStr, mode: 'insensitive' } },
+          { titleFr: { contains: searchStr, mode: 'insensitive' } }
+        ]
+      },
+      take: 5
+    }),
+    this.prisma.blogPost.findMany({
+      where: {
+        OR: [
+          { title: { contains: searchStr, mode: 'insensitive' } },
+          { content: { contains: searchStr, mode: 'insensitive' } }
+        ]
+      },
+      take: 5
+    }),
+    this.prisma.outreachApplication.findMany({
+      where: {
+        OR: [
+          { applicantName: { contains: searchStr, mode: 'insensitive' } },
+          { email: { contains: searchStr, mode: 'insensitive' } }
+        ]
+      },
+      take: 5
+    }),
+    this.prisma.publicImpactStat.findMany({
+      where: {
+        OR: [
+          { label: { contains: searchStr, mode: 'insensitive' } },
+          { value: { contains: searchStr, mode: 'insensitive' } }
+        ]
+      },
+      take: 5
+    })
+  ]);
+
+  const results = [
+    ...projects.map(p => ({
+      id: p.id,
+      type: 'COMMUNITY PROJECT',
+      title: p.title,
+      subtitle: `Community: ${p.communitySlug}`,
+      link: '/app/outreach/projects'
+    })),
+    ...events.map(e => ({
+      id: e.id,
+      type: e.type === 'SCHOLARSHIP' ? 'SCHOLARSHIP' : 'EVENT',
+      title: e.title,
+      subtitle: `Type: ${e.type}`,
+      link: e.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/events'
+    })),
+    ...blogs.map(b => ({
+      id: b.id,
+      type: 'BLOG POST',
+      title: b.title,
+      subtitle: `Status: ${b.status}`,
+      link: '/app/outreach/cms'
+    })),
+    ...applications.map(a => ({
+      id: a.id,
+      type: 'APPLICATION',
+      title: a.applicantName,
+      subtitle: `Track: ${a.type}`,
+      link: a.type === 'SCHOLARSHIP' ? '/app/outreach/scholarships' : '/app/outreach/applications'
+    })),
+    ...stats.map(s => ({
+      id: s.id,
+      type: 'IMPACT STAT',
+      title: s.label,
+      subtitle: `Value: ${s.value}`,
+      link: '/app/outreach/stats'
+    }))
+  ];
+
+  return results;
+}
 
   async handleOrangeWebhook(payload: any) {
-    console.log('Received PixiPay Webhook:', payload);
-    const reference = payload.reference;
-    let status: any = 'UNKNOWN';
+  console.log('Received PixiPay Webhook:', payload);
+  const reference = payload.reference;
+  let status: any = 'UNKNOWN';
 
-    if (['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(payload.status?.toUpperCase())) {
-      status = 'SETTLED';
-    } else if (['FAILED', 'ERROR', 'REJECTED'].includes(payload.status?.toUpperCase())) {
-      status = 'FAILED';
-    }
-
-    if (reference && status !== 'UNKNOWN') {
-      try {
-        await this.prisma.donation.update({
-          where: { id: reference },
-          data: { status }
-        });
-      } catch (err) {
-        console.error('Failed to update donation from Orange webhook', err);
-      }
-    }
-    return { received: true };
+  if (['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(payload.status?.toUpperCase())) {
+    status = 'SETTLED';
+  } else if (['FAILED', 'ERROR', 'REJECTED'].includes(payload.status?.toUpperCase())) {
+    status = 'FAILED';
   }
+
+  if (reference && status !== 'UNKNOWN') {
+    try {
+      await this.prisma.donation.update({
+        where: { id: reference },
+        data: { status }
+      });
+    } catch (err) {
+      console.error('Failed to update donation from Orange webhook', err);
+    }
+  }
+  return { received: true };
+}
 
   async handleMtnWebhook(payload: any) {
-    console.log('Received MTN Webhook:', payload);
-    const externalId = payload.externalId;
-    const moMoStatus = payload.status;
-    let status: any = 'UNKNOWN';
+  console.log('Received MTN Webhook:', payload);
+  const externalId = payload.externalId;
+  const moMoStatus = payload.status;
+  let status: any = 'UNKNOWN';
 
-    if (moMoStatus === 'SUCCESSFUL') {
-      status = 'SETTLED';
-    } else if (moMoStatus === 'FAILED') {
-      status = 'FAILED';
-    }
-
-    if (externalId && status !== 'UNKNOWN') {
-      try {
-        await this.prisma.donation.update({
-          where: { id: externalId },
-          data: { status }
-        });
-      } catch (err) {
-        console.error('Failed to update donation from MTN webhook', err);
-      }
-    }
-    return { received: true };
+  if (moMoStatus === 'SUCCESSFUL') {
+    status = 'SETTLED';
+  } else if (moMoStatus === 'FAILED') {
+    status = 'FAILED';
   }
+
+  if (externalId && status !== 'UNKNOWN') {
+    try {
+      await this.prisma.donation.update({
+        where: { id: externalId },
+        data: { status }
+      });
+    } catch (err) {
+      console.error('Failed to update donation from MTN webhook', err);
+    }
+  }
+  return { received: true };
+}
 
   async getDonations() {
-    return this.prisma.donation.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-  }
+  return this.prisma.donation.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+}
 
   async getOverviewStats() {
-    const totalDonationsObj = await this.prisma.donation.aggregate({
-      _sum: { amount: true },
-    });
-    const totalDonations = totalDonationsObj._sum.amount || 0;
+  const totalDonationsObj = await this.prisma.donation.aggregate({
+    _sum: { amount: true },
+  });
+  const totalDonations = totalDonationsObj._sum.amount || 0;
 
-    const donationCount = await this.prisma.donation.count();
+  const donationCount = await this.prisma.donation.count();
 
-    const activeEvents = await this.prisma.outreachEvent.count({
-      where: { status: 'OPEN' }
-    });
+  const activeEvents = await this.prisma.outreachEvent.count({
+    where: { status: 'OPEN' }
+  });
 
-    const pendingApplications = await this.prisma.outreachApplication.count({
-      where: { status: 'PENDING' }
-    });
+  const pendingApplications = await this.prisma.outreachApplication.count({
+    where: { status: 'PENDING' }
+  });
 
-    return {
-      activeEvents,
-      pendingApplications,
-      totalDonations,
-      donationCount,
-    };
-  }
+  return {
+    activeEvents,
+    pendingApplications,
+    totalDonations,
+    donationCount,
+  };
+}
 
   async createApplication(data: any) {
-    const documentUrls: string[] = [];
-    if (data.documents && Array.isArray(data.documents)) {
-      for (const docBase64 of data.documents) {
-        const url = await this.uploadToSupabase(docBase64, 'application-doc');
-        if (url) documentUrls.push(url);
-      }
+  const documentUrls: string[] = [];
+  if (data.documents && Array.isArray(data.documents)) {
+    for (const docBase64 of data.documents) {
+      const url = await this.uploadToSupabase(docBase64, 'application-doc');
+      if (url) documentUrls.push(url);
     }
-
-    const { documents, ...cleanData } = data;
-
-    return this.prisma.outreachApplication.create({
-      data: {
-        ...cleanData,
-        documents: documentUrls
-      }
-    });
   }
+
+  const { documents, ...cleanData } = data;
+
+  return this.prisma.outreachApplication.create({
+    data: {
+      ...cleanData,
+      documents: documentUrls
+    }
+  });
+}
 
   async getApplications() {
-    return this.prisma.outreachApplication.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-  }
+  return this.prisma.outreachApplication.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+}
 
   async sendNewsletter(data: { subject: string; body: string; audience: string }) {
-    // 1. Fetch audience emails based on type
-    const emails = new Set<string>();
+  // 1. Fetch audience emails based on type
+  const emails = new Set<string>();
 
-    if (data.audience === 'ALL' || data.audience === 'SUBSCRIBERS') {
-      const subs = await this.prisma.newsletterSubscriber.findMany({ select: { email: true } });
-      subs.forEach(s => emails.add(s.email));
-    }
-    
-    if (data.audience === 'ALL' || data.audience === 'DONATORS') {
-      const dons = await this.prisma.donation.findMany({ select: { email: true } });
-      dons.forEach(d => emails.add(d.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'VOLUNTEERS') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'VOLUNTEER' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'SCHOLARSHIPS') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'SCHOLARSHIP' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'FAMILIES') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'FAMILY_IN_NEED' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    // SIMULATED SENDING LOGIC (Using external mail service)
-    console.log(`[NEWSLETTER] Sending email to ${emails.size} recipients in audience ${data.audience}`);
-    console.log(`[NEWSLETTER] Subject: ${data.subject}`);
-    
-    return {
-      success: true,
-      recipientsCount: emails.size,
-      message: `Successfully dispatched to ${emails.size} recipients.`
-    };
+  if (data.audience === 'ALL' || data.audience === 'SUBSCRIBERS') {
+    const subs = await this.prisma.newsletterSubscriber.findMany({ select: { email: true } });
+    subs.forEach(s => emails.add(s.email));
   }
+
+  if (data.audience === 'ALL' || data.audience === 'DONATORS') {
+    const dons = await this.prisma.donation.findMany({ select: { email: true } });
+    dons.forEach(d => emails.add(d.email));
+  }
+
+  if (data.audience === 'ALL' || data.audience === 'VOLUNTEERS') {
+    const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'VOLUNTEER' }, select: { email: true } });
+    apps.forEach(a => emails.add(a.email));
+  }
+
+  if (data.audience === 'ALL' || data.audience === 'SCHOLARSHIPS') {
+    const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'SCHOLARSHIP' }, select: { email: true } });
+    apps.forEach(a => emails.add(a.email));
+  }
+
+  if (data.audience === 'ALL' || data.audience === 'FAMILIES') {
+    const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'FAMILY_IN_NEED' }, select: { email: true } });
+    apps.forEach(a => emails.add(a.email));
+  }
+
+  // SIMULATED SENDING LOGIC (Using external mail service)
+  console.log(`[NEWSLETTER] Sending email to ${emails.size} recipients in audience ${data.audience}`);
+  console.log(`[NEWSLETTER] Subject: ${data.subject}`);
+
+  return {
+    success: true,
+    recipientsCount: emails.size,
+    message: `Successfully dispatched to ${emails.size} recipients.`
+  };
+}
 
   // --- Outreach Events (Scholarships, etc) ---
   
   async getEvents() {
-    return this.prisma.outreachEvent.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: {
-          select: { applications: true }
-        }
+  return this.prisma.outreachEvent.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: {
+        select: { applications: true }
       }
-    });
-  }
+    }
+  });
+}
 
-  private mapEventStatus(rawStatus?: string): OutreachEventStatus {
-    if (!rawStatus) return OutreachEventStatus.OPEN;
-    const s = String(rawStatus).toUpperCase();
-    if (s === 'DRAFT') return OutreachEventStatus.DRAFT;
-    if (s === 'SCHEDULED') return OutreachEventStatus.SCHEDULED;
-    if (s === 'CLOSED' || s === 'COMPLETED') return OutreachEventStatus.CLOSED;
-    return OutreachEventStatus.OPEN;
-  }
+  private mapEventStatus(rawStatus ?: string): OutreachEventStatus {
+  if (!rawStatus) return OutreachEventStatus.OPEN;
+  const s = String(rawStatus).toUpperCase();
+  if (s === 'DRAFT') return OutreachEventStatus.DRAFT;
+  if (s === 'SCHEDULED') return OutreachEventStatus.SCHEDULED;
+  if (s === 'CLOSED' || s === 'COMPLETED') return OutreachEventStatus.CLOSED;
+  return OutreachEventStatus.OPEN;
+}
 
   async createEvent(data: any) {
-    let storyMediaUrl = data.storyMediaUrl || null;
-    if (data.storyMediaBase64) {
-      const url = await this.uploadToSupabase(data.storyMediaBase64, 'outreach-story');
-      if (url) storyMediaUrl = url;
-    }
-
-    const processedGallery: any[] = [];
-    if (data.gallery && Array.isArray(data.gallery)) {
-      for (const item of data.gallery) {
-        let itemUrl = item.url || null;
-        if (item.fileBase64) {
-          const url = await this.uploadToSupabase(item.fileBase64, 'outreach-gallery');
-          if (url) itemUrl = url;
-        }
-        if (itemUrl) {
-          processedGallery.push({
-            url: itemUrl,
-            caption: item.caption || '',
-            captionFr: item.captionFr || ''
-          });
-        }
-      }
-    }
-
-    const status = this.mapEventStatus(data.status);
-
-    return this.prisma.outreachEvent.create({
-      data: {
-        title: data.title,
-        titleFr: data.titleFr,
-        description: data.description,
-        descriptionFr: data.descriptionFr,
-        type: data.type || 'SCHOLARSHIP',
-        status,
-        openDate: data.openDate ? new Date(data.openDate) : null,
-        closeDate: data.closeDate ? new Date(data.closeDate) : null,
-        targetSchools: data.targetSchools || [],
-        videoUrl: data.videoUrl || null,
-        gallery: processedGallery.length > 0 ? processedGallery : undefined,
-        storyTitle: data.storyTitle || null,
-        storyTitleFr: data.storyTitleFr || null,
-        storyDescription: data.storyDescription || null,
-        storyDescriptionFr: data.storyDescriptionFr || null,
-        storyMediaUrl,
-        storyMediaType: data.storyMediaType || null,
-        customFields: data.customFields || null
-      }
-    });
+  let storyMediaUrl = data.storyMediaUrl || null;
+  if (data.storyMediaBase64) {
+    const url = await this.uploadToSupabase(data.storyMediaBase64, 'outreach-story');
+    if (url) storyMediaUrl = url;
   }
+
+  const processedGallery: any[] = [];
+  if (data.gallery && Array.isArray(data.gallery)) {
+    for (const item of data.gallery) {
+      let itemUrl = item.url || null;
+      if (item.fileBase64) {
+        const url = await this.uploadToSupabase(item.fileBase64, 'outreach-gallery');
+        if (url) itemUrl = url;
+      }
+      if (itemUrl) {
+        processedGallery.push({
+          url: itemUrl,
+          caption: item.caption || '',
+          captionFr: item.captionFr || ''
+        });
+      }
+    }
+  }
+
+  const status = this.mapEventStatus(data.status);
+
+  return this.prisma.outreachEvent.create({
+    data: {
+      title: data.title,
+      titleFr: data.titleFr,
+      description: data.description,
+      descriptionFr: data.descriptionFr,
+      type: data.type || 'SCHOLARSHIP',
+      status,
+      openDate: data.openDate ? new Date(data.openDate) : null,
+      closeDate: data.closeDate ? new Date(data.closeDate) : null,
+      targetSchools: data.targetSchools || [],
+      videoUrl: data.videoUrl || null,
+      gallery: processedGallery.length > 0 ? processedGallery : undefined,
+      storyTitle: data.storyTitle || null,
+      storyTitleFr: data.storyTitleFr || null,
+      storyDescription: data.storyDescription || null,
+      storyDescriptionFr: data.storyDescriptionFr || null,
+      storyMediaUrl,
+      storyMediaType: data.storyMediaType || null,
+      customFields: data.customFields || null
+    }
+  });
+}
 
   async updateEventStatus(id: string, status: any) {
-    const validStatus = this.mapEventStatus(status);
-    return this.prisma.outreachEvent.update({
-      where: { id },
-      data: { status: validStatus }
-    });
-  }
+  const validStatus = this.mapEventStatus(status);
+  return this.prisma.outreachEvent.update({
+    where: { id },
+    data: { status: validStatus }
+  });
+}
 
   // --- Blog Posts ---
 
-  async getPosts(status?: string) {
-    return this.prisma.blogPost.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+  async getPosts(status ?: string) {
+  return this.prisma.blogPost.findMany({
+    where: status ? { status } : undefined,
+    orderBy: { createdAt: 'desc' },
+  });
+}
 
   async createPost(data: any) {
-    // Priority: direct URL from frontend upload > base64 fallback
-    let coverImage = data.coverImage || null;
-    if (!coverImage && data.coverImageBase64) {
-      const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
-      if (url) coverImage = url;
-    }
-
-    const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
-
-    return this.prisma.blogPost.create({
-      data: {
-        title: data.title,
-        slug,
-        content: data.content,
-        category: data.category || 'Blog',
-        coverImage,
-        images: data.images || [],
-        video: data.video || null,
-        author: data.author || 'ENAKO Outreach Team',
-        status: data.status || 'DRAFT',
-        publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
-      }
-    });
+  // Priority: direct URL from frontend upload > base64 fallback
+  let coverImage = data.coverImage || null;
+  if (!coverImage && data.coverImageBase64) {
+    const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
+    if (url) coverImage = url;
   }
+
+  const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
+
+  return this.prisma.blogPost.create({
+    data: {
+      title: data.title,
+      slug,
+      content: data.content,
+      category: data.category || 'Blog',
+      coverImage,
+      images: data.images || [],
+      video: data.video || null,
+      author: data.author || 'ENAKO Outreach Team',
+      status: data.status || 'DRAFT',
+      publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
+    }
+  });
+}
 
   async updatePost(id: string, data: any) {
-    // Priority: direct URL from frontend upload > base64 fallback
-    let coverImage = data.coverImage || null;
-    if (!coverImage && data.coverImageBase64) {
-      const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
-      if (url) coverImage = url;
-    }
-
-    return this.prisma.blogPost.update({
-      where: { id },
-      data: {
-        title: data.title,
-        content: data.content,
-        category: data.category,
-        ...(coverImage && { coverImage }),
-        author: data.author || undefined,
-        images: data.images,
-        video: data.video,
-        status: data.status,
-        publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
-      }
-    });
+  // Priority: direct URL from frontend upload > base64 fallback
+  let coverImage = data.coverImage || null;
+  if (!coverImage && data.coverImageBase64) {
+    const url = await this.uploadToSupabase(data.coverImageBase64, 'blog-cover');
+    if (url) coverImage = url;
   }
+
+  return this.prisma.blogPost.update({
+    where: { id },
+    data: {
+      title: data.title,
+      content: data.content,
+      category: data.category,
+      ...(coverImage && { coverImage }),
+      author: data.author || undefined,
+      images: data.images,
+      video: data.video,
+      status: data.status,
+      publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
+    }
+  });
+}
 
   async updatePostStatus(id: string, status: string) {
-    return this.prisma.blogPost.update({
-      where: { id },
-      data: { 
-        status,
-        publishedAt: status === 'PUBLISHED' ? new Date() : null,
-      }
-    });
-  }
+  return this.prisma.blogPost.update({
+    where: { id },
+    data: {
+      status,
+      publishedAt: status === 'PUBLISHED' ? new Date() : null,
+    }
+  });
+}
 
   // --- Analytics & Cookie Intelligence ---
   async recordCookieConsent(data: { consent: string; userAgent?: string; deviceType?: string; country?: string }) {
-    return this.prisma.cookieConsentRecord.create({
-      data: {
-        consent: data.consent,
-        userAgent: data.userAgent || null,
-        deviceType: data.deviceType || 'desktop',
-        country: data.country || 'Cameroon',
-      }
-    });
-  }
+  return this.prisma.cookieConsentRecord.create({
+    data: {
+      consent: data.consent,
+      userAgent: data.userAgent || null,
+      deviceType: data.deviceType || 'desktop',
+      country: data.country || 'Cameroon',
+    }
+  });
+}
 
   async recordAnalyticsEvent(data: any) {
-    return this.prisma.webAnalyticsEvent.create({
-      data: {
-        eventType: data.eventType || 'pageview',
-        path: data.path || '/',
-        referrer: data.referrer || null,
-        utmSource: data.utmSource || null,
-        utmMedium: data.utmMedium || null,
-        utmCampaign: data.utmCampaign || null,
-        clickX: data.clickX ? parseFloat(data.clickX) : null,
-        clickY: data.clickY ? parseFloat(data.clickY) : null,
-        scrollDepth: data.scrollDepth ? parseInt(data.scrollDepth, 10) : null,
-        duration: data.duration ? parseInt(data.duration, 10) : null,
-        deviceType: data.deviceType || 'desktop',
-        country: data.country || 'Cameroon',
-      }
-    });
-  }
+  return this.prisma.webAnalyticsEvent.create({
+    data: {
+      eventType: data.eventType || 'pageview',
+      path: data.path || '/',
+      referrer: data.referrer || null,
+      utmSource: data.utmSource || null,
+      utmMedium: data.utmMedium || null,
+      utmCampaign: data.utmCampaign || null,
+      clickX: data.clickX ? parseFloat(data.clickX) : null,
+      clickY: data.clickY ? parseFloat(data.clickY) : null,
+      scrollDepth: data.scrollDepth ? parseInt(data.scrollDepth, 10) : null,
+      duration: data.duration ? parseInt(data.duration, 10) : null,
+      deviceType: data.deviceType || 'desktop',
+      country: data.country || 'Cameroon',
+    }
+  });
+}
 
   async getWebInsights(site: string = 'outreach') {
-    if (site === 'main') {
-      return {
-        consent: { total: 0, accepted: 0, declined: 0, rate: 0 },
-        traffic: { totalEvents: 0, pageviews: 0, avgDurationSeconds: 0, bounceRatePercent: 0 },
-        heatmaps: [],
-        campaigns: [],
-        topPages: [],
-        recentEvents: []
-      };
-    }
-
-    const [
-      totalConsent,
-      acceptedConsent,
-      declinedConsent,
-      totalEvents,
-      pageviews,
-      clicks,
-      topPagesGrouped,
-      campaignsGrouped,
-      conversionsGrouped,
-      recentEvents,
-      avgDurationAggr,
-    ] = await Promise.all([
-      this.prisma.cookieConsentRecord.count(),
-      this.prisma.cookieConsentRecord.count({ where: { consent: 'accepted' } }),
-      this.prisma.cookieConsentRecord.count({ where: { consent: 'essential_only' } }),
-      this.prisma.webAnalyticsEvent.count(),
-      this.prisma.webAnalyticsEvent.count({ where: { eventType: 'pageview' } }),
-      this.prisma.webAnalyticsEvent.findMany({
-        where: { eventType: 'click', clickX: { not: null }, clickY: { not: null } },
-        take: 200,
-        select: { path: true, clickX: true, clickY: true, createdAt: true },
-        orderBy: { createdAt: 'desc' }
-      }),
-      this.prisma.webAnalyticsEvent.groupBy({
-        by: ['path'],
-        where: { eventType: 'pageview' },
-        _count: { path: true },
-        orderBy: { _count: { path: 'desc' } },
-        take: 10
-      }),
-      this.prisma.webAnalyticsEvent.groupBy({
-        by: ['utmSource', 'utmCampaign'],
-        where: { utmSource: { not: null } },
-        _count: { _all: true, utmSource: true },
-        orderBy: { _count: { utmSource: 'desc' } },
-        take: 10
-      }),
-      this.prisma.webAnalyticsEvent.groupBy({
-        by: ['utmSource', 'utmCampaign'],
-        where: { utmSource: { not: null }, eventType: 'conversion' },
-        _count: { _all: true },
-      }),
-      this.prisma.webAnalyticsEvent.findMany({
-        take: 50,
-        orderBy: { createdAt: 'desc' }
-      }),
-      this.prisma.webAnalyticsEvent.aggregate({
-        where: { duration: { not: null } },
-        _avg: { duration: true }
-      })
-    ]);
-
-    let consentRate = totalConsent > 0 ? Math.round((acceptedConsent / totalConsent) * 100) : 0;
-    let avgDurationSeconds = Math.round(avgDurationAggr._avg?.duration || 0);
-
-    const pathTitleMap: Record<string, string> = {
-      '/': 'Home Page',
-      '/about': 'About Us',
-      '/programs': 'Outreach Programs',
-      '/impact': 'Impact & Projects',
-      '/stories': 'Impact Stories',
-      '/volunteer': 'Volunteer & Get Involved',
-      '/donate': 'Donate Now',
-      '/school-registration': 'School Partnership Registration',
-      '/roadmap': 'Project Roadmap',
-      '/partnership': 'Partnership Page',
-      '/contact': 'Contact Us',
-      '/focus-communities': 'Focus Communities',
-      '/apply/scholarship': 'Scholarship Application',
-      '/blog': 'Blog & Articles',
-      '/privacy-policy': 'Privacy Policy',
-      '/terms-of-service': 'Terms of Service',
-      '/search': 'Search Page'
+  if (site === 'main') {
+    return {
+      consent: { total: 0, accepted: 0, declined: 0, rate: 0 },
+      traffic: { totalEvents: 0, pageviews: 0, avgDurationSeconds: 0, bounceRatePercent: 0 },
+      heatmaps: [],
+      campaigns: [],
+      topPages: [],
+      recentEvents: []
     };
+  }
 
-    const topPages = topPagesGrouped.map((item) => ({
-      path: item.path,
-      title: pathTitleMap[item.path] || item.path,
-      views: item._count.path,
-      avgTime: avgDurationSeconds > 0 ? `${Math.floor(avgDurationSeconds / 60)}m ${avgDurationSeconds % 60}s` : '0m 45s'
-    }));
+  const [
+    totalConsent,
+    acceptedConsent,
+    declinedConsent,
+    totalEvents,
+    pageviews,
+    clicks,
+    topPagesGrouped,
+    campaignsGrouped,
+    conversionsGrouped,
+    recentEvents,
+    avgDurationAggr,
+  ] = await Promise.all([
+    this.prisma.cookieConsentRecord.count(),
+    this.prisma.cookieConsentRecord.count({ where: { consent: 'accepted' } }),
+    this.prisma.cookieConsentRecord.count({ where: { consent: 'essential_only' } }),
+    this.prisma.webAnalyticsEvent.count(),
+    this.prisma.webAnalyticsEvent.count({ where: { eventType: 'pageview' } }),
+    this.prisma.webAnalyticsEvent.findMany({
+      where: { eventType: 'click', clickX: { not: null }, clickY: { not: null } },
+      take: 200,
+      select: { path: true, clickX: true, clickY: true, createdAt: true },
+      orderBy: { createdAt: 'desc' }
+    }),
+    this.prisma.webAnalyticsEvent.groupBy({
+      by: ['path'],
+      where: { eventType: 'pageview' },
+      _count: { path: true },
+      orderBy: { _count: { path: 'desc' } },
+      take: 10
+    }),
+    this.prisma.webAnalyticsEvent.groupBy({
+      by: ['utmSource', 'utmCampaign'],
+      where: { utmSource: { not: null } },
+      _count: { _all: true, utmSource: true },
+      orderBy: { _count: { utmSource: 'desc' } },
+      take: 10
+    }),
+    this.prisma.webAnalyticsEvent.groupBy({
+      by: ['utmSource', 'utmCampaign'],
+      where: { utmSource: { not: null }, eventType: 'conversion' },
+      _count: { _all: true },
+    }),
+    this.prisma.webAnalyticsEvent.findMany({
+      take: 50,
+      orderBy: { createdAt: 'desc' }
+    }),
+    this.prisma.webAnalyticsEvent.aggregate({
+      where: { duration: { not: null } },
+      _avg: { duration: true }
+    })
+  ]);
 
-    const campaigns = (campaignsGrouped as any[]).map((c: any) => {
-      const conv = (conversionsGrouped as any[]).find(
-        (cg) => cg.utmSource === c.utmSource && cg.utmCampaign === c.utmCampaign
-      );
-      const conversionCount = conv ? conv._count._all : 0;
-      
-      let roi = 'Organic';
-      if (c.utmSource && c._count._all > 0) {
-        const rate = ((conversionCount / c._count._all) * 100).toFixed(1);
-        roi = `${rate}% Rate`;
-      }
-      
-      return {
-        name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
-        channel: c.utmSource || 'Organic Search',
-        clicks: c._count._all,
-        conversions: conversionCount,
-        roi
-      };
-    });
+  let consentRate = totalConsent > 0 ? Math.round((acceptedConsent / totalConsent) * 100) : 0;
+  let avgDurationSeconds = Math.round(avgDurationAggr._avg?.duration || 0);
+
+  const pathTitleMap: Record<string, string> = {
+    '/': 'Home Page',
+    '/about': 'About Us',
+    '/programs': 'Outreach Programs',
+    '/impact': 'Impact & Projects',
+    '/stories': 'Impact Stories',
+    '/volunteer': 'Volunteer & Get Involved',
+    '/donate': 'Donate Now',
+    '/school-registration': 'School Partnership Registration',
+    '/roadmap': 'Project Roadmap',
+    '/partnership': 'Partnership Page',
+    '/contact': 'Contact Us',
+    '/focus-communities': 'Focus Communities',
+    '/apply/scholarship': 'Scholarship Application',
+    '/blog': 'Blog & Articles',
+    '/privacy-policy': 'Privacy Policy',
+    '/terms-of-service': 'Terms of Service',
+    '/search': 'Search Page'
+  };
+
+  const topPages = topPagesGrouped.map((item) => ({
+    path: item.path,
+    title: pathTitleMap[item.path] || item.path,
+    views: item._count.path,
+    avgTime: avgDurationSeconds > 0 ? `${Math.floor(avgDurationSeconds / 60)}m ${avgDurationSeconds % 60}s` : '0m 45s'
+  }));
+
+  const campaigns = (campaignsGrouped as any[]).map((c: any) => {
+    const conv = (conversionsGrouped as any[]).find(
+      (cg) => cg.utmSource === c.utmSource && cg.utmCampaign === c.utmCampaign
+    );
+    const conversionCount = conv ? conv._count._all : 0;
+
+    let roi = 'Organic';
+    if (c.utmSource && c._count._all > 0) {
+      const rate = ((conversionCount / c._count._all) * 100).toFixed(1);
+      roi = `${rate}% Rate`;
+    }
 
     return {
-      consent: {
-        total: totalConsent,
-        accepted: acceptedConsent,
-        declined: declinedConsent,
-        rate: consentRate,
-      },
-      traffic: {
-        totalEvents: totalEvents,
-        pageviews: pageviews,
-        avgDurationSeconds: avgDurationSeconds,
-        bounceRatePercent: totalEvents > 0 ? Math.round(((totalEvents - pageviews) / Math.max(1, totalEvents)) * 100) : 0,
-      },
-      heatmaps: clicks,
-      campaigns,
-      topPages,
-      recentEvents
+      name: c.utmCampaign || c.utmSource || 'Direct Organic Search',
+      channel: c.utmSource || 'Organic Search',
+      clicks: c._count._all,
+      conversions: conversionCount,
+      roi
     };
-  }
+  });
+
+  return {
+    consent: {
+      total: totalConsent,
+      accepted: acceptedConsent,
+      declined: declinedConsent,
+      rate: consentRate,
+    },
+    traffic: {
+      totalEvents: totalEvents,
+      pageviews: pageviews,
+      avgDurationSeconds: avgDurationSeconds,
+      bounceRatePercent: totalEvents > 0 ? Math.round(((totalEvents - pageviews) / Math.max(1, totalEvents)) * 100) : 0,
+    },
+    heatmaps: clicks,
+    campaigns,
+    topPages,
+    recentEvents
+  };
+}
 
   // --- Community Projects CRUD ---
-  async getCommunityProjects(communitySlug?: string) {
-    return this.prisma.communityProject.findMany({
-      where: communitySlug ? { communitySlug } : {},
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+  async getCommunityProjects(communitySlug ?: string) {
+  return this.prisma.communityProject.findMany({
+    where: communitySlug ? { communitySlug } : {},
+    orderBy: { createdAt: 'desc' },
+  });
+}
 
   async createCommunityProject(data: any) {
-    // Upload cover image if it's base64
-    let coverImageUrl: string | null = null;
-    if (data.coverImage && data.coverImage.startsWith('data:')) {
-      coverImageUrl = await this.uploadToSupabase(data.coverImage, 'project-cover');
-    } else if (data.coverImage) {
-      coverImageUrl = data.coverImage; // Already a URL
-    }
+  // Upload cover image if it's base64
+  let coverImageUrl: string-null = null;
+  if (data.coverImage && data.coverImage.startsWith('data:')) {
+    coverImageUrl = await this.uploadToSupabase(data.coverImage, 'project-cover');
+  } else if (data.coverImage) {
+    coverImageUrl = data.coverImage; // Already a URL
+  }
 
-    // Upload extra images if they are base64
-    const imageUrls: string[] = [];
-    if (Array.isArray(data.images)) {
-      for (const img of data.images) {
-        if (img && img.startsWith('data:')) {
-          const url = await this.uploadToSupabase(img, 'project-photo');
-          if (url) imageUrls.push(url);
-        } else if (img) {
-          imageUrls.push(img); // Already a URL
-        }
+  // Upload extra images if they are base64
+  const imageUrls: string[] = [];
+  if (Array.isArray(data.images)) {
+    for (const img of data.images) {
+      if (img && img.startsWith('data:')) {
+        const url = await this.uploadToSupabase(img, 'project-photo');
+        if (url) imageUrls.push(url);
+      } else if (img) {
+        imageUrls.push(img); // Already a URL
       }
     }
-
-    return this.prisma.communityProject.create({
-      data: {
-        title: data.title,
-        description: data.description,
-        communitySlug: data.communitySlug || 'kumba',
-        targetAmount: data.targetAmount ? parseFloat(data.targetAmount) : 500000,
-        currentAmount: data.currentAmount ? parseFloat(data.currentAmount) : 0,
-        status: data.status || 'In Progress',
-        coverImage: coverImageUrl,
-        videoUrl: data.videoUrl || null,
-        images: imageUrls,
-      },
-    });
   }
+
+  return this.prisma.communityProject.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      communitySlug: data.communitySlug || 'kumba',
+      targetAmount: data.targetAmount ? parseFloat(data.targetAmount) : 500000,
+      currentAmount: data.currentAmount ? parseFloat(data.currentAmount) : 0,
+      status: data.status || 'In Progress',
+      coverImage: coverImageUrl,
+      videoUrl: data.videoUrl || null,
+      images: imageUrls,
+    },
+  });
+}
 
   async updateCommunityProject(id: string, data: any) {
-    // Upload cover image if base64
-    let coverImage = data.coverImage;
-    if (coverImage && coverImage.startsWith('data:')) {
-      const url = await this.uploadToSupabase(coverImage, 'project-cover');
-      if (url) coverImage = url;
-    }
-
-    // Upload extra images if base64
-    let images = data.images;
-    if (Array.isArray(images)) {
-      const uploadedImages: string[] = [];
-      for (const img of images) {
-        if (img && img.startsWith('data:')) {
-          const url = await this.uploadToSupabase(img, 'project-photo');
-          if (url) uploadedImages.push(url);
-        } else if (img) {
-          uploadedImages.push(img);
-        }
-      }
-      images = uploadedImages;
-    }
-
-    return this.prisma.communityProject.update({
-      where: { id },
-      data: {
-        ...(data.title ? { title: data.title } : {}),
-        ...(data.description ? { description: data.description } : {}),
-        ...(data.communitySlug ? { communitySlug: data.communitySlug } : {}),
-        ...(data.targetAmount !== undefined ? { targetAmount: parseFloat(data.targetAmount) } : {}),
-        ...(data.currentAmount !== undefined ? { currentAmount: parseFloat(data.currentAmount) } : {}),
-        ...(data.status ? { status: data.status } : {}),
-        ...(coverImage !== undefined ? { coverImage } : {}),
-        ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
-        ...(images ? { images } : {}),
-      },
-    });
+  // Upload cover image if base64
+  let coverImage = data.coverImage;
+  if (coverImage && coverImage.startsWith('data:')) {
+    const url = await this.uploadToSupabase(coverImage, 'project-cover');
+    if (url) coverImage = url;
   }
+
+  // Upload extra images if base64
+  let images = data.images;
+  if (Array.isArray(images)) {
+    const uploadedImages: string[] = [];
+    for (const img of images) {
+      if (img && img.startsWith('data:')) {
+        const url = await this.uploadToSupabase(img, 'project-photo');
+        if (url) uploadedImages.push(url);
+      } else if (img) {
+        uploadedImages.push(img);
+      }
+    }
+    images = uploadedImages;
+  }
+
+  return this.prisma.communityProject.update({
+    where: { id },
+    data: {
+      ...(data.title ? { title: data.title } : {}),
+      ...(data.description ? { description: data.description } : {}),
+      ...(data.communitySlug ? { communitySlug: data.communitySlug } : {}),
+      ...(data.targetAmount !== undefined ? { targetAmount: parseFloat(data.targetAmount) } : {}),
+      ...(data.currentAmount !== undefined ? { currentAmount: parseFloat(data.currentAmount) } : {}),
+      ...(data.status ? { status: data.status } : {}),
+      ...(coverImage !== undefined ? { coverImage } : {}),
+      ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
+      ...(images ? { images } : {}),
+    },
+  });
+}
 
   async deleteCommunityProject(id: string) {
-    return this.prisma.communityProject.delete({
-      where: { id },
-    });
-  }
+  return this.prisma.communityProject.delete({
+    where: { id },
+  });
+}
 
   // --- Public Impact Stats CRUD ---
   async getPublicImpactStats() {
-    return this.prisma.publicImpactStat.findMany({
-      orderBy: { order: 'asc' },
-    });
-  }
+  return this.prisma.publicImpactStat.findMany({
+    orderBy: { order: 'asc' },
+  });
+}
 
   async createPublicImpactStat(data: any) {
-    return this.prisma.publicImpactStat.create({
-      data: {
-        key: data.key,
-        value: data.value,
-        label: data.label,
-        section: data.section,
-        order: parseInt(data.order) || 0,
-      }
-    });
-  }
+  return this.prisma.publicImpactStat.create({
+    data: {
+      key: data.key,
+      value: data.value,
+      label: data.label,
+      section: data.section,
+      order: parseInt(data.order) || 0,
+    }
+  });
+}
 
   async updatePublicImpactStat(id: string, data: any) {
-    return this.prisma.publicImpactStat.update({
-      where: { id },
-      data: {
-        ...(data.key && { key: data.key }),
-        ...(data.value && { value: data.value }),
-        ...(data.label && { label: data.label }),
-        ...(data.section && { section: data.section }),
-        ...(data.order !== undefined && { order: parseInt(data.order) || 0 }),
-      }
-    });
-  }
+  return this.prisma.publicImpactStat.update({
+    where: { id },
+    data: {
+      ...(data.key && { key: data.key }),
+      ...(data.value && { value: data.value }),
+      ...(data.label && { label: data.label }),
+      ...(data.section && { section: data.section }),
+      ...(data.order !== undefined && { order: parseInt(data.order) || 0 }),
+    }
+  });
+}
 
   async deletePublicImpactStat(id: string) {
-    return this.prisma.publicImpactStat.delete({
-      where: { id },
-    });
-  }
+  return this.prisma.publicImpactStat.delete({
+    where: { id },
+  });
+}
 }

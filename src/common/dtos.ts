@@ -42,11 +42,11 @@ export class QueryDto {
 
   @IsOptional()
   @IsString()
-  sortOrder?: 'asc' | 'desc' = 'desc';
+  sortOrder?: 'asc'-'desc' = 'desc';
 
-  @IsOptional()
-  @IsString()
-  department?: string;
+@IsOptional()
+@IsString()
+department ?: string;
 }
 
 // ─── Employees ────────────────────────────────────────────────────────────────
@@ -656,17 +656,17 @@ export class CreateCashCollectionDto {
 
   @IsString()
   @IsOptional()
-  status?: 'COMPLETE' | 'PENDING' | 'CANCELLED';
+  status?: 'COMPLETE'-'PENDING' - 'CANCELLED';
 
-  @IsString()
-  description!: string;
+@IsString()
+description!: string;
 
-  @IsString()
-  @IsOptional()
-  receiptUrl?: string;
+@IsString()
+@IsOptional()
+receiptUrl ?: string;
 }
 
 export class UpdateCashCollectionStatusDto {
   @IsString()
-  status!: 'COMPLETE' | 'PENDING' | 'CANCELLED';
+  status!: 'COMPLETE'-'PENDING' - 'CANCELLED';
 }
