@@ -45,6 +45,12 @@ export class EmployeesController {
     return this.employees.activate(id);
   }
 
+  @Post(':id/field-marketer-template')
+  @Roles('CEO', 'MANAGER')
+  applyFieldMarketerTemplate(@Param('id') id: string) {
+    return this.employees.applyFieldMarketerTemplate(id);
+  }
+
   @Delete(':id')
   @Roles('CEO')
   remove(@Param('id') id: string) {

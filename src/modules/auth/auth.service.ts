@@ -194,11 +194,13 @@ export class AuthService {
     role: { name: string };
     department?: { name: string } | null;
     ledDepartments?: { name: string }[];
+    title?: string | null;
   }) {
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      title: user.title ?? null,
       role: user.role.name,
       department: user.department?.name ?? null,
       ledDepartments: user.ledDepartments?.map(d => d.name) || [],
