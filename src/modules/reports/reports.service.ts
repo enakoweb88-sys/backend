@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtUser } from '../../common/current-user.decorator';
 
@@ -41,33 +41,44 @@ export class ReportsService {
       }
     });
   }
-  listDaily(user: JwtUser) {
+
+  listDaily(user: JwtUser, queryType?: string) {
+    const includeUsers = {
+      user: { select: { id: true, fullName: true, email: true, role: true } },
+      reviewer: { select: { id: true, fullName: true, email: true, role: true } }
+    };
+
     if (user.role === 'CEO') {
       return this.prisma.dailyReport.findMany({
-        where: { type: 'GENERAL' },
+        where: queryType ? { type: queryType } : undefined,
         orderBy: { date: 'desc' },
-        include: { user: { select: { fullName: true, email: true, role: true } } }
+        include: includeUsers
       });
     }
 
     if (user.role === 'MANAGER' || user.role === 'OUTREACH_MANAGER') {
       return this.prisma.dailyReport.findMany({
-        where: {
-          OR: [
-            { type: 'DAILY' },
-            { userId: user.sub }
-          ]
-        },
+        where: queryType
+          ? { type: queryType }
+          : {
+              OR: [
+                { type: { in: ['DAILY', 'WEEKLY', 'FIELD'] } },
+                { userId: user.sub }
+              ]
+            },
         orderBy: { date: 'desc' },
-        include: { user: { select: { fullName: true, email: true, role: true } } }
+        include: includeUsers
       });
     }
 
     // Default to employee
     return this.prisma.dailyReport.findMany({
-      where: { userId: user.sub },
+      where: {
+        userId: user.sub,
+        ...(queryType ? { type: queryType } : {})
+      },
       orderBy: { date: 'desc' },
-      include: { user: { select: { fullName: true, email: true, role: true } } }
+      include: includeUsers
     });
   }
 
@@ -85,6 +96,10 @@ export class ReportsService {
         status: body.status || 'SUBMITTED',
         attachments: body.attachments || null,
         userId: user.sub
+      },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, role: true } },
+        reviewer: { select: { id: true, fullName: true, email: true, role: true } }
       }
     });
   }
@@ -97,6 +112,35 @@ export class ReportsService {
         ...(body.type && { type: body.type }),
         ...(body.status && { status: body.status }),
         ...(body.attachments && { attachments: body.attachments })
+      },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, role: true } },
+        reviewer: { select: { id: true, fullName: true, email: true, role: true } }
+      }
+    });
+  }
+
+  async reviewDaily(id: string, body: { status: string; reviewerComments?: string }, user: JwtUser) {
+    if (user.role !== 'MANAGER' && user.role !== 'OUTREACH_MANAGER' && user.role !== 'CEO') {
+      throw new ForbiddenException('Only managers and executives can review and verify field reports.');
+    }
+
+    const report = await this.prisma.dailyReport.findUnique({ where: { id } });
+    if (!report) {
+      throw new NotFoundException('Daily report not found.');
+    }
+
+    return this.prisma.dailyReport.update({
+      where: { id },
+      data: {
+        status: body.status,
+        reviewerComments: body.reviewerComments !== undefined ? body.reviewerComments : report.reviewerComments,
+        reviewerId: user.sub,
+        reviewedAt: new Date()
+      },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, role: true } },
+        reviewer: { select: { id: true, fullName: true, email: true, role: true } }
       }
     });
   }

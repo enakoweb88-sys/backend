@@ -63,7 +63,10 @@ model User {
   auditLogs            AuditLog[]
   channelMembers       ChannelMember[]
   commissions          Commission[]
-  dailyReports         DailyReport[]
+  dailyReports         DailyReport[]         @relation("UserDailyReports")
+  reviewedDailyReports DailyReport[]         @relation("ReviewedDailyReports")
+  marketerLeads        MarketerLead[]
+  marketerTerritories  MarketerTerritory[]
   documents            Document[]
   expenses             Expense[]
   cashCollections      CashCollection[]
@@ -260,21 +263,28 @@ model MealRecord {
 }
 
 model DailyReport {
-  id          String    @id @default(cuid())
-  userId      String
-  date        DateTime  @default(now())
-  content     String
-  loginTime   DateTime?
-  logoutTime  DateTime?
-  pdfUrl      String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  type        String    @default("DAILY")
-  attachments Json?
-  status      String    @default("SUBMITTED")
-  user        User      @relation(fields: [userId], references: [id])
+  id               String    @id @default(cuid())
+  userId           String
+  date             DateTime  @default(now())
+  content          String
+  loginTime        DateTime?
+  logoutTime       DateTime?
+  pdfUrl           String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  type             String    @default("DAILY")
+  attachments      Json?
+  status           String    @default("SUBMITTED")
+  reviewerId       String?
+  reviewerComments String?
+  reviewedAt       DateTime?
+  user             User      @relation("UserDailyReports", fields: [userId], references: [id])
+  reviewer         User?     @relation("ReviewedDailyReports", fields: [reviewerId], references: [id])
 
   @@index([userId])
+  @@index([reviewerId])
+  @@index([type])
+  @@index([status])
   @@map("daily_reports")
 }
 
@@ -1098,4 +1108,44 @@ model CashCollection {
   @@index([status])
   @@index([collectionTime])
   @@map("cash_collections")
+}
+
+model MarketerLead {
+  id                String    @id @default(cuid())
+  marketerId        String
+  prospectName      String
+  phone             String?
+  zone              String?
+  product           String?
+  status            String    @default("NEW_LEAD")
+  notes             String?
+  nextAction        String?
+  contactPermission Boolean   @default(true)
+  followUpDate      DateTime?
+  outcome           String?
+  evidenceRef       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  marketer          User      @relation(fields: [marketerId], references: [id], onDelete: Cascade)
+
+  @@index([marketerId])
+  @@index([status])
+  @@index([zone])
+  @@map("marketer_leads")
+}
+
+model MarketerTerritory {
+  id             String   @id @default(cuid())
+  marketerId     String
+  zoneName       String
+  region         String   @default("Bonaberi")
+  targetAudience String?
+  schedule       String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  marketer       User     @relation(fields: [marketerId], references: [id], onDelete: Cascade)
+
+  @@index([marketerId])
+  @@map("marketer_territories")
 }
