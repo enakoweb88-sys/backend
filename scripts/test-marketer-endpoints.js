@@ -122,6 +122,12 @@ async function testAll() {
     console.log(`Reviewer: ${reviewedReport.reviewer?.fullName} (${reviewedReport.reviewer?.role?.name})`);
     console.log(`Reviewer Comments: ${reviewedReport.reviewerComments}`);
     console.log(`Reviewed At: ${reviewedReport.reviewedAt}`);
+
+    // Clean up test report
+    await prisma.dailyReport.delete({ where: { id: fieldReport.id } });
+    console.log('🧹 Cleaned up temporary test daily report.');
+  } else {
+    await prisma.dailyReport.delete({ where: { id: fieldReport.id } });
   }
 
   // Clean up test lead

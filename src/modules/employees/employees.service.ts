@@ -200,42 +200,6 @@ export class EmployeesService {
     return this.toEmployee(user);
   }
 
-  async applyFieldMarketerTemplate(id: string) {
-    const employee = await this.prisma.user.findUnique({ where: { id } });
-    if (!employee) throw new NotFoundException('Employee not found');
-
-    const template = [
-      { title: 'Prospecting', description: 'Contact 200 new prospects monthly (about 10 daily). Count only verified app downloads and prospects.', targetValue: 200, unit: 'verified prospects' },
-      { title: 'Verified Akawo account activations', description: 'Achieve 40 verified Akawo accounts created in the month.', targetValue: 40, unit: 'verified accounts' },
-      { title: 'Landbanking accounts with first payment', description: 'Achieve 20 Landbanking accounts funded with a first payment.', targetValue: 20, unit: 'funded accounts' },
-      { title: 'Customer follow-up within 48 hours', description: 'Follow up with 20 interested prospects within 48 hours.', targetValue: 20, unit: 'follow-ups' },
-      { title: 'Customer retention: second payment within 30 days', description: 'At least 60% of newly activated customers make a confirmed second payment within 30 days.', targetValue: 60, unit: '%' },
-      { title: 'Daily field reports and office check-ins', description: 'Submit daily field reports and attend the required twice-weekly office check-ins.', targetValue: 100, unit: '%' },
-      { title: 'Conduct and attendance', description: 'Maintain punctuality, accurate customer information, and compliance with company procedures.', targetValue: 100, unit: '%' },
-    ];
-
-    const existing = await this.prisma.goal.findMany({
-      where: { ownerId: id, scope: 'PERSONAL' },
-      select: { title: true },
-    });
-    const existingTitles = new Set(existing.map((goal) => goal.title.trim().toLowerCase()));
-    const missing = template.filter((goal) => !existingTitles.has(goal.title.toLowerCase()));
-
-    if (missing.length) {
-      await this.prisma.goal.createMany({
-        data: missing.map((goal) => ({ ...goal, currentValue: 0, scope: 'PERSONAL', ownerId: id })),
-      });
-    }
-
-    // Convert generic employee records such as Anthony's into an identifiable
-    // field-marketer profile without overriding a more specific job title.
-    if (!employee.title || employee.title.trim().toLowerCase() === 'employee') {
-      await this.prisma.user.update({ where: { id }, data: { title: 'Field Marketer' } });
-    }
-
-    return { added: missing.length, total: template.length };
-  }
-
   suspend(id: string) { return this.setStatus(id, UserStatus.SUSPENDED); }
   activate(id: string) { return this.setStatus(id, UserStatus.ACTIVE); }
   remove(id: string) { return this.setStatus(id, UserStatus.DELETED); }

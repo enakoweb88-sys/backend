@@ -82,14 +82,20 @@ export class ReportsService {
     });
   }
 
-  createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, user: JwtUser) {
+  async createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, user: JwtUser) {
     if (!body.content || body.content.trim().length === 0) {
       throw new BadRequestException('Report content cannot be empty. Please fill in all required fields.');
     }
-    return this.prisma.dailyReport.create({
-      data: {
+    const reportType = body.type || 'DAILY';
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    const existing = await this.prisma.dailyReport.findFirst({ where: { userId: user.sub, type: reportType, date: { gte: start, lte: end } } });
+    if (existing) throw new BadRequestException('You already submitted this report today. Use revise and resubmit instead.');
+
+    return this.prisma.$transaction(async (tx) => {
+      const report = await tx.dailyReport.create({ data: {
         content: body.content,
-        type: body.type || 'DAILY',
+        type: reportType,
         loginTime: body.loginTime ? new Date(body.loginTime) : null,
         logoutTime: body.logoutTime ? new Date(body.logoutTime) : null,
         pdfUrl: body.pdfUrl,
@@ -100,23 +106,59 @@ export class ReportsService {
       include: {
         user: { select: { id: true, fullName: true, email: true, role: true } },
         reviewer: { select: { id: true, fullName: true, email: true, role: true } }
+      }});
+      if (reportType === 'FIELD') {
+        let metrics: any = {}; try { metrics = JSON.parse(body.content); } catch {}
+        const increments: Record<string, number> = {
+          'prospecting': Number(metrics.people || 0),
+          'verified akawo account activations': Number(metrics.accounts || 0),
+          'landbanking accounts with first payment': Number(metrics.transactions || 0),
+          'customer follow-up within 48 hours': Number(metrics.followUps || 0),
+        };
+        const goals = await tx.goal.findMany({ where: { ownerId: user.sub, scope: 'PERSONAL', status: 'ACTIVE' } });
+        for (const goal of goals) {
+          const amount = Number(metrics.kpiResults?.[goal.id] ?? increments[goal.title.trim().toLowerCase()] ?? 0);
+          if (amount > 0) await tx.goal.update({ where: { id: goal.id }, data: { currentValue: { increment: amount } } });
+        }
       }
+      return report;
     });
   }
 
-  updateDaily(id: string, body: { content?: string; type?: string; status?: string; attachments?: any }, user: JwtUser) {
-    return this.prisma.dailyReport.update({
-      where: { id, userId: user.sub },
+  async updateDaily(id: string, body: { content?: string; type?: string; status?: string; attachments?: any }, user: JwtUser) {
+    const existing = await this.prisma.dailyReport.findFirst({ where: { id, userId: user.sub } });
+    if (!existing) throw new NotFoundException('Daily report not found.');
+    return this.prisma.$transaction(async (tx) => {
+      const report = await tx.dailyReport.update({
+      where: { id },
       data: {
         ...(body.content && { content: body.content }),
         ...(body.type && { type: body.type }),
-        ...(body.status && { status: body.status }),
+        status: body.status || 'SUBMITTED',
+        reviewerComments: null,
+        reviewerId: null,
+        reviewedAt: null,
         ...(body.attachments && { attachments: body.attachments })
       },
       include: {
         user: { select: { id: true, fullName: true, email: true, role: true } },
         reviewer: { select: { id: true, fullName: true, email: true, role: true } }
+      }});
+      if (existing.type === 'FIELD' && body.content) {
+        let before: any = {}; let after: any = {};
+        try { before = JSON.parse(existing.content); } catch {}
+        try { after = JSON.parse(body.content); } catch {}
+        const keys: Record<string, string> = { prospecting: 'people', 'verified akawo account activations': 'accounts', 'landbanking accounts with first payment': 'transactions', 'customer follow-up within 48 hours': 'followUps' };
+        const goals = await tx.goal.findMany({ where: { ownerId: user.sub, scope: 'PERSONAL', status: 'ACTIVE' } });
+        for (const goal of goals) {
+          const key = keys[goal.title.trim().toLowerCase()];
+          const afterValue = after.kpiResults?.[goal.id] ?? (key ? after[key] : 0);
+          const beforeValue = before.kpiResults?.[goal.id] ?? (key ? before[key] : 0);
+          const delta = Number(afterValue || 0) - Number(beforeValue || 0);
+          if (delta) await tx.goal.update({ where: { id: goal.id }, data: { currentValue: { increment: delta } } });
+        }
       }
+      return report;
     });
   }
 

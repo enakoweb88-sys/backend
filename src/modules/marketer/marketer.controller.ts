@@ -60,10 +60,15 @@ export class MarketerController {
     return this.marketerService.getScorecard(user, marketerId);
   }
 
-  // ──────────────────────────── KPI GOALS AUTO-PROVISION ────────────────────────────
-
-  @Post('ensure-kpis')
-  ensureKpis(@CurrentUser() user: JwtUser) {
-    return this.marketerService.ensureMarketerKpis(user);
+  @Get('daily-plan')
+  getDailyPlan(@CurrentUser() user: JwtUser, @Query('marketerId') marketerId?: string) {
+    return this.marketerService.getDailyPlan(user, marketerId);
   }
+
+  @Get('leaderboard/daily')
+  @Roles('CEO', 'MANAGER', 'OUTREACH_MANAGER')
+  getDailyLeaderboard(@CurrentUser() user: JwtUser) {
+    return this.marketerService.getDailyLeaderboard(user);
+  }
+
 }

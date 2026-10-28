@@ -442,6 +442,10 @@ export class CreateGoalDto {
   @IsOptional()
   targetValue?: number;
 
+  @IsString()
+  @IsOptional()
+  targetLabel?: string;
+
   @Type(() => Number)
   @IsNumber()
   @IsOptional()
@@ -466,6 +470,15 @@ export class CreateGoalDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isKpi?: boolean;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  kpiWeight?: number;
 }
 
 export class UpdateGoalDto {
@@ -481,6 +494,10 @@ export class UpdateGoalDto {
   @IsNumber()
   @IsOptional()
   targetValue?: number;
+
+  @IsString()
+  @IsOptional()
+  targetLabel?: string;
 
   @Type(() => Number)
   @IsNumber()
@@ -498,6 +515,15 @@ export class UpdateGoalDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isKpi?: boolean;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  kpiWeight?: number;
 }
 
 // ─── Announcements ────────────────────────────────────────────────────────────

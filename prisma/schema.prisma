@@ -332,6 +332,7 @@ model Goal {
   title        String
   description  String?
   targetValue  Decimal?    @db.Decimal(14, 2)
+  targetLabel  String?
   currentValue Decimal?    @default(0) @db.Decimal(14, 2)
   unit         String?
   departmentId String?
@@ -341,6 +342,8 @@ model Goal {
   ownerId      String?
   scope        GoalScope   @default(COMPANY)
   status       GoalStatus  @default(ACTIVE)
+  isKpi        Boolean     @default(false)
+  kpiWeight    Decimal?    @db.Decimal(5, 2)
   department   Department? @relation(fields: [departmentId], references: [id])
   owner        User?       @relation("PersonalGoals", fields: [ownerId], references: [id])
 

@@ -2,22 +2,6 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtUser } from '../../common/current-user.decorator';
 
-const FIELD_MARKETER_TEMPLATE = [
-  { title: 'Prospecting', description: 'Contact 200 new prospects monthly (about 10 daily). Count only verified app downloads and prospects.', targetValue: 200, unit: 'verified prospects' },
-  { title: 'Verified Akawo account activations', description: 'Achieve 40 verified Akawo accounts created in the month.', targetValue: 40, unit: 'verified accounts' },
-  { title: 'Landbanking accounts with first payment', description: 'Achieve 20 Landbanking accounts funded with a first payment.', targetValue: 20, unit: 'funded accounts' },
-  { title: 'Customer follow-up within 48 hours', description: 'Follow up with 20 interested prospects within 48 hours.', targetValue: 20, unit: 'follow-ups' },
-  { title: 'Customer retention: second payment within 30 days', description: 'At least 60% of newly activated customers make a confirmed second payment within 30 days.', targetValue: 60, unit: '%' },
-  { title: 'Daily field reports and office check-ins', description: 'Submit daily field reports and attend the required twice-weekly office check-ins.', targetValue: 100, unit: '%' },
-  { title: 'Conduct and attendance', description: 'Maintain punctuality, accurate customer information, and compliance with company procedures.', targetValue: 100, unit: '%' },
-];
-
-const DEFAULT_TERRITORY = [
-  { zoneName: 'Bonassama', region: 'Bonaberi', targetAudience: 'Retail shops and services', schedule: 'Morning | Prospecting' },
-  { zoneName: 'Mambanda', region: 'Bonaberi', targetAudience: 'Traders and communities', schedule: 'Midday | Demonstrations' },
-  { zoneName: 'Ndobo', region: 'Bonaberi', targetAudience: 'Scheduled prospect follow-ups', schedule: 'Afternoon | Activation support' },
-];
-
 @Injectable()
 export class MarketerService {
   constructor(private readonly prisma: PrismaService) {}
@@ -44,62 +28,6 @@ export class MarketerService {
         marketer: { select: { id: true, fullName: true, email: true, phone: true } },
       },
     });
-
-    // If marketer has 0 leads yet, seed starter sample leads so the register is immediately functional
-    if (leads.length === 0 && !isMgr) {
-      await this.prisma.marketerLead.createMany({
-        data: [
-          {
-            marketerId: user.sub,
-            prospectName: 'Bonaberi Central Market Vendors',
-            phone: '+237 670 11 22 33',
-            zone: 'Bonassama',
-            product: 'Akawo / Savings',
-            status: 'FOLLOW_UP_DUE',
-            nextAction: 'Explain account setup and daily savings',
-            notes: 'Interested in daily Akawo collection for market traders.',
-            contactPermission: true,
-            followUpDate: new Date(Date.now() + 86400000 * 2),
-            evidenceRef: null,
-          },
-          {
-            marketerId: user.sub,
-            prospectName: 'Mambanda Youth Cooperative',
-            phone: '+237 691 44 55 66',
-            zone: 'Mambanda',
-            product: 'Njangi',
-            status: 'NEW_LEAD',
-            nextAction: 'Arrange group product demonstration',
-            notes: 'Group of 15 members looking for automated digital Njangi.',
-            contactPermission: true,
-            followUpDate: new Date(Date.now() + 86400000 * 4),
-            evidenceRef: null,
-          },
-          {
-            marketerId: user.sub,
-            prospectName: 'Ndobo Commercial Center',
-            phone: '+237 655 77 88 99',
-            zone: 'Ndobo',
-            product: 'Land Banking',
-            status: 'ACCOUNT_OPENED',
-            nextAction: 'Verify account reference and initial deposit',
-            notes: 'Opened land banking plan; awaiting payment confirmation.',
-            contactPermission: true,
-            followUpDate: new Date(),
-            outcome: 'Account opened successfully',
-            evidenceRef: 'ACC-LB-2026-081',
-          },
-        ],
-      });
-
-      return this.prisma.marketerLead.findMany({
-        where: { marketerId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          marketer: { select: { id: true, fullName: true, email: true, phone: true } },
-        },
-      });
-    }
 
     return leads;
   }
@@ -194,27 +122,10 @@ export class MarketerService {
     const isMgr = this.isManager(user.role);
     const targetMarketerId = isMgr && marketerId ? marketerId : user.sub;
 
-    let territories = await this.prisma.marketerTerritory.findMany({
+    return this.prisma.marketerTerritory.findMany({
       where: { marketerId: targetMarketerId, isActive: true },
       orderBy: { createdAt: 'asc' },
     });
-
-    if (territories.length === 0) {
-      // Auto-assign default Bonaberi territory layout for this marketer
-      await this.prisma.marketerTerritory.createMany({
-        data: DEFAULT_TERRITORY.map((item) => ({
-          ...item,
-          marketerId: targetMarketerId,
-        })),
-      });
-
-      territories = await this.prisma.marketerTerritory.findMany({
-        where: { marketerId: targetMarketerId, isActive: true },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
-
-    return territories;
   }
 
   async assignTerritory(
@@ -274,13 +185,13 @@ export class MarketerService {
     sunday.setHours(23, 59, 59, 999);
 
     // Fetch FIELD reports submitted by marketer this week
-    const reports = await this.prisma.dailyReport.findMany({
+    const [reports, goals] = await Promise.all([this.prisma.dailyReport.findMany({
       where: {
         userId: targetMarketerId,
         type: 'FIELD',
         date: { gte: monday, lte: sunday },
       },
-    });
+    }), this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE' } })]);
 
     let peopleApproached = 0;
     let qualifiedProspects = 0;
@@ -327,41 +238,68 @@ export class MarketerService {
       },
       reportsSubmitted: reports.length,
       measures: [
-        { label: 'People approached', actual: peopleApproached, target: 100 },
-        { label: 'Qualified prospects', actual: qualifiedProspects, target: 40 },
-        { label: 'Verified accounts', actual: verifiedAccounts, target: 15 },
-        { label: 'First transactions', actual: firstTransactions, target: 8 },
-        { label: 'Follow-ups completed', actual: followUpsCompleted, target: 25 },
-        { label: 'Daily reports', actual: reports.length, target: 5 },
-      ],
+        { goal: 'prospecting', label: 'People approached', actual: peopleApproached },
+        { goal: 'verified akawo account activations', label: 'Verified accounts', actual: verifiedAccounts },
+        { goal: 'landbanking accounts with first payment', label: 'First transactions', actual: firstTransactions },
+        { goal: 'customer follow-up within 48 hours', label: 'Follow-ups completed', actual: followUpsCompleted },
+        { goal: 'daily field reports and office check-ins', label: 'Daily reports', actual: reports.length },
+      ].map((measure) => {
+        const assigned = goals.find((goal) => goal.title.trim().toLowerCase() === measure.goal);
+        return { label: measure.label, actual: measure.actual, target: assigned ? Math.max(1, Math.ceil(Number(assigned.targetValue || 0) / 4)) : 0, configured: Boolean(assigned) };
+      }).filter((measure) => measure.configured),
     };
   }
 
-  // ──────────────────────────── KPI GOALS AUTO-PROVISION ────────────────────────────
+  async getDailyPlan(user: JwtUser, marketerId?: string) {
+    const targetMarketerId = this.isManager(user.role) && marketerId ? marketerId : user.sub;
+    const now = new Date();
+    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    const end = new Date(now); end.setHours(23, 59, 59, 999);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  async ensureMarketerKpis(user: JwtUser) {
-    const existing = await this.prisma.goal.findMany({
-      where: { ownerId: user.sub, scope: 'PERSONAL' },
-      select: { title: true },
-    });
+    const [goals, dueLeads, report] = await Promise.all([
+      this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }),
+      this.prisma.marketerLead.findMany({
+        where: { marketerId: targetMarketerId, followUpDate: { lte: end }, status: { notIn: ['VERIFIED', 'LOST'] } },
+        orderBy: { followUpDate: 'asc' }, take: 5,
+      }),
+      this.prisma.dailyReport.findFirst({ where: { userId: targetMarketerId, type: 'FIELD', date: { gte: start, lte: end } } }),
+    ]);
 
-    const existingTitles = new Set(existing.map((g) => g.title.trim().toLowerCase()));
-    const missing = FIELD_MARKETER_TEMPLATE.filter((g) => !existingTitles.has(g.title.toLowerCase()));
+    const elapsedDays = Math.max(1, now.getDate());
+    const totalDays = monthEnd.getDate();
+    const actions: any[] = dueLeads.map((lead) => ({
+      id: `lead-${lead.id}`, source: 'FOLLOW_UP', title: `Follow up with ${lead.prospectName}`,
+      description: `${lead.product || 'Product'} · ${lead.zone || 'Unassigned zone'}`, href: '/app/marketer/leads',
+    }));
 
-    if (missing.length > 0) {
-      await this.prisma.goal.createMany({
-        data: missing.map((goal) => ({
-          ...goal,
-          currentValue: 0,
-          scope: 'PERSONAL',
-          ownerId: user.sub,
-        })),
-      });
+    for (const goal of goals) {
+      if (actions.length >= 4) break;
+      const target = Number(goal.targetValue || 0);
+      const current = Number(goal.currentValue || 0);
+      const expected = target * (elapsedDays / totalDays);
+      if (target > 0 && current < expected) {
+        const dailyNeeded = Math.max(1, Math.ceil((target - current) / Math.max(1, totalDays - elapsedDays + 1)));
+        actions.push({ id: `goal-${goal.id}`, source: 'KPI', title: goal.title,
+          description: `Complete at least ${dailyNeeded} ${goal.unit || 'units'} today to stay on target.`, href: '/app/marketer/performance' });
+      }
     }
 
-    return this.prisma.goal.findMany({
-      where: { ownerId: user.sub, scope: 'PERSONAL' },
-      orderBy: { createdAt: 'asc' },
+    if (!report) actions.push({ id: 'daily-report', source: 'REPORT', title: 'Submit today\'s field report', description: 'Record verified activity and evidence before close of business.', href: '/app/marketer/daily-report' });
+    return { date: start.toISOString(), generatedFrom: 'ASSIGNED_KPIS_AND_ACTIVITY', actions: actions.slice(0, 5) };
+  }
+
+  async getDailyLeaderboard(user: JwtUser) {
+    if (!this.isManager(user.role)) throw new ForbiddenException('Only managers can view the team leaderboard');
+    const now = new Date(); const start = new Date(now); start.setHours(0, 0, 0, 0); const end = new Date(now); end.setHours(23, 59, 59, 999);
+    const reports = await this.prisma.dailyReport.findMany({
+      where: { type: 'FIELD', date: { gte: start, lte: end } },
+      include: { user: { select: { id: true, fullName: true, title: true } } },
     });
+    return reports.map((report) => {
+      let data: any = {}; try { data = JSON.parse(report.content); } catch {}
+      const score = Number(data.people || 0) + Number(data.qualified || 0) * 2 + Number(data.followUps || 0) * 2 + Number(data.accounts || 0) * 5 + Number(data.transactions || 0) * 6;
+      return { reportId: report.id, marketer: report.user, score, status: report.status, metrics: data };
+    }).sort((a, b) => b.score - a.score).map((row, index) => ({ rank: index + 1, ...row }));
   }
 }

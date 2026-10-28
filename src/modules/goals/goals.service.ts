@@ -36,7 +36,7 @@ export class GoalsService {
       },
       include: {
         department: { select: { id: true, name: true } },
-        owner: { select: { id: true, fullName: true, role: { select: { name: true } } } },
+        owner: { select: { id: true, fullName: true, title: true, department: true, role: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       take: query.limit ?? 50,
@@ -48,7 +48,7 @@ export class GoalsService {
       where: { id },
       include: {
         department: { select: { id: true, name: true } },
-        owner: { select: { id: true, fullName: true, role: { select: { name: true } } } },
+        owner: { select: { id: true, fullName: true, title: true, department: true, role: { select: { name: true } } } },
       },
     });
     if (!goal) throw new NotFoundException('Goal not found');
@@ -64,12 +64,15 @@ export class GoalsService {
         title: dto.title,
         description: dto.description,
         targetValue: dto.targetValue,
+        targetLabel: dto.targetLabel,
         currentValue: dto.currentValue ?? 0,
         unit: dto.unit,
         scope: dto.scope ?? 'COMPANY' as any,
         departmentId: dto.departmentId,
         ownerId: dto.ownerId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        isKpi: dto.isKpi ?? false,
+        kpiWeight: dto.kpiWeight,
       },
       include: {
         department: { select: { id: true, name: true } },
@@ -91,10 +94,13 @@ export class GoalsService {
         ...(dto.title ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.targetValue !== undefined ? { targetValue: dto.targetValue } : {}),
+        ...(dto.targetLabel !== undefined ? { targetLabel: dto.targetLabel } : {}),
         ...(dto.currentValue !== undefined ? { currentValue: dto.currentValue } : {}),
         ...(dto.unit !== undefined ? { unit: dto.unit } : {}),
         ...(dto.dueDate ? { dueDate: new Date(dto.dueDate) } : {}),
         ...(dto.status ? { status: dto.status as any } : {}),
+        ...(dto.isKpi !== undefined ? { isKpi: dto.isKpi } : {}),
+        ...(dto.kpiWeight !== undefined ? { kpiWeight: dto.kpiWeight } : {}),
       },
       include: {
         department: { select: { id: true, name: true } },
