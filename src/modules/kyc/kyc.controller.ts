@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors, UploadedFiles, HttpException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors, UploadedFiles, HttpException, NotFoundException, ServiceUnavailableException, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname, join } from 'path';
@@ -16,6 +17,61 @@ import { KycService } from './kyc.service';
 @Controller('kyc')
 export class KycController {
   constructor(private readonly kyc: KycService, private config: ConfigService) {}
+
+  @Get('submissions/:submissionId/documents/:documentId/file')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CEO', 'MANAGER')
+  async documentFile(
+    @Param('submissionId') submissionId: string,
+    @Param('documentId') documentId: string,
+    @Res() response: Response,
+  ) {
+    const document = await this.kyc.findDocument(submissionId, documentId);
+    if (!document?.fileUrl) throw new NotFoundException('This document has no stored file. Please request a new upload.');
+
+    let bytes: Buffer;
+    let mimeType = 'application/octet-stream';
+    if (document.fileUrl.startsWith('/uploads/')) {
+      const name = document.fileUrl.slice('/uploads/'.length);
+      if (!/^[\w.-]+$/.test(name)) throw new NotFoundException('Invalid document path.');
+      try {
+        bytes = await fs.promises.readFile(join(process.cwd(), 'uploads', name));
+      } catch {
+        throw new NotFoundException('The stored file is missing. Please request a new upload.');
+      }
+    } else {
+      // Resolve legacy project URLs by object path against the configured storage project.
+      let path: string;
+      try {
+        const url = new URL(document.fileUrl);
+        const prefix = '/storage/v1/object/public/kyc-documents/';
+        if (!url.pathname.startsWith(prefix)) throw new Error('Unsupported storage URL');
+        path = decodeURIComponent(url.pathname.slice(prefix.length));
+        if (!path || path.split('/').some(part => part === '..' || part === '.')) throw new Error('Invalid path');
+      } catch {
+        throw new NotFoundException('This document has an unsupported storage link. Please request a new upload.');
+      }
+      const storageUrl = this.config.get<string>('SUPABASE_URL');
+      const storageKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+      if (!storageUrl || !storageKey) throw new ServiceUnavailableException('Document storage is not configured. Please contact the administrator.');
+      try {
+        const storage = createClient(storageUrl, storageKey, { auth: { persistSession: false } });
+        const { data, error } = await storage.storage.from('kyc-documents').download(path);
+        if (error || !data) throw new Error('Storage download failed');
+        bytes = Buffer.from(await data.arrayBuffer());
+        mimeType = data.type || mimeType;
+      } catch {
+        throw new ServiceUnavailableException('The document could not be retrieved from storage. Please retry or request a new upload if the file is missing.');
+      }
+    }
+    const contentType = document.mimeType || mimeType;
+    const previewTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'text/plain'];
+    response.setHeader('Content-Type', previewTypes.includes(contentType) ? contentType : 'application/octet-stream');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(document.fileName)}`);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.send(bytes);
+  }
 
   @Post('submissions')
   @UseInterceptors(AnyFilesInterceptor({

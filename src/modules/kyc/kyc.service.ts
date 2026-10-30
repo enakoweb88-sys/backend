@@ -14,6 +14,10 @@ export class KycService {
     private readonly mailService: MailService,
   ) {}
 
+  findDocument(submissionId: string, id: string) {
+    return this.prisma.kycDocument.findFirst({ where: { id, submissionId } });
+  }
+
   async submit(body: {
     applicantType: string;
     applicantName: string;
