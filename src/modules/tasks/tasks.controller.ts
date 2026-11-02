@@ -18,8 +18,8 @@ export class TasksController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tasks.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.tasks.findOne(id, user);
   }
 
   @Post()
@@ -57,7 +57,7 @@ export class TasksController {
   }
 
   @Get(':id/comments')
-  getComments(@Param('id') taskId: string) {
-    return this.tasks.getComments(taskId);
+  getComments(@Param('id') taskId: string, @CurrentUser() user: JwtUser) {
+    return this.tasks.getComments(taskId, user);
   }
 }

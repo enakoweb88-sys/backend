@@ -3,7 +3,7 @@ import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
-import { CreateGoalDto, QueryDto, UpdateGoalDto } from '../../common/dtos';
+import { CreateGoalDto, GoalQueryDto, GoalReportQueryDto, GoalProgressDto, UpdateGoalDto } from '../../common/dtos';
 import { GoalsService } from './goals.service';
 
 @Controller('goals')
@@ -12,17 +12,21 @@ export class GoalsController {
   constructor(private readonly goals: GoalsService) {}
 
   @Get()
-  list(@Query() query: QueryDto & { scope?: string; status?: string }, @CurrentUser() user: JwtUser) {
+  list(@Query() query: GoalQueryDto, @CurrentUser() user: JwtUser) {
     return this.goals.list(query, user);
   }
 
+  @Get('report')
+  report(@Query() query: GoalReportQueryDto, @CurrentUser() user: JwtUser) {
+    return this.goals.report(query, user);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.goals.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.goals.findOne(id, user);
   }
 
   @Post()
-  @Roles('CEO', 'MANAGER')
   create(@Body() dto: CreateGoalDto, @CurrentUser() user: JwtUser) {
     return this.goals.create(dto, user);
   }
@@ -36,14 +40,13 @@ export class GoalsController {
   @Patch(':id/progress')
   updateProgress(
     @Param('id') id: string,
-    @Body('currentValue') currentValue: number,
+    @Body() dto: GoalProgressDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.goals.updateProgress(id, currentValue, user);
+    return this.goals.updateProgress(id, dto.currentValue, user);
   }
 
   @Patch(':id/complete')
-  @Roles('CEO', 'MANAGER')
   complete(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.goals.complete(id, user);
   }

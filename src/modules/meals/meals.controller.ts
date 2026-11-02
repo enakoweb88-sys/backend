@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -20,11 +20,17 @@ export class MealsController {
   record(@Body() dto: MealDto, @CurrentUser() user: JwtUser) {
     // Non-managers/executives can ONLY log their own personal meals
     const r = (user.role || '').toUpperCase();
-    if (r !== 'MANAGER' && r !== 'OUTREACH_MANAGER' && r !== 'CEO' && r !== 'ADMIN') {
+    if (r !== 'MANAGER' && r !== 'CEO') {
       dto.employeeId = user.sub;
     }
     dto.price = 1000; // Fixed delivery meal price (1,000 FCFA)
-    return this.meals.record(dto);
+    return this.meals.record(dto, user);
+  }
+
+  @Delete(':id')
+  @Roles('CEO', 'MANAGER')
+  remove(@Param('id') id: string) {
+    return this.meals.remove(id);
   }
 
   @Patch(':id/dispute')

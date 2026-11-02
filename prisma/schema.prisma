@@ -256,7 +256,7 @@ model MealRecord {
   notes          String?
   employee       User       @relation(fields: [employeeId], references: [id])
 
-  @@unique([employeeId, date])
+  @@index([employeeId, date])
   @@index([employeeId])
   @@index([status])
   @@map("meal_records")
@@ -278,6 +278,7 @@ model DailyReport {
   reviewerId       String?
   reviewerComments String?
   reviewedAt       DateTime?
+  documents        ReportDocument[]
   user             User      @relation("UserDailyReports", fields: [userId], references: [id])
   reviewer         User?     @relation("ReviewedDailyReports", fields: [reviewerId], references: [id])
 
@@ -286,6 +287,21 @@ model DailyReport {
   @@index([type])
   @@index([status])
   @@map("daily_reports")
+}
+
+model ReportDocument {
+  id           String      @id @default(cuid())
+  reportId     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  sha256       String
+  data         Bytes
+  createdAt    DateTime    @default(now())
+  report       DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_documents")
 }
 
 model KycSubmission {
@@ -337,6 +353,9 @@ model Goal {
   unit         String?
   departmentId String?
   dueDate      DateTime?
+  cadence      String?
+  periodStart  DateTime?
+  completedAt  DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   ownerId      String?
@@ -350,6 +369,7 @@ model Goal {
   @@index([scope, status])
   @@index([departmentId])
   @@index([ownerId])
+  @@index([status, completedAt])
   @@map("goals")
 }
 

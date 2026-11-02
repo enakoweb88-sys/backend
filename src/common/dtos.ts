@@ -6,13 +6,14 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
   Min,
   MinLength,
 } from 'class-validator';
-import { RoleName, MealStatus, KycStatus, TaskPriority, GoalScope } from '@prisma/client';
+import { RoleName, MealStatus, KycStatus, TaskPriority, TaskStatus, GoalScope } from '@prisma/client';
 
 // Re-export enums for backward compatibility
 export { RoleName, MealStatus, KycStatus, TaskPriority, GoalScope };
@@ -330,6 +331,10 @@ export class MoneyDto {
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
 export class CreateTaskDto {
+  @IsEnum(TaskStatus)
+  @IsOptional()
+  status?: TaskStatus;
+
   @IsString()
   title!: string;
 
@@ -430,6 +435,14 @@ export class KycReviewDto {
 // ─── Goals ────────────────────────────────────────────────────────────────────
 
 export class CreateGoalDto {
+  @IsIn(['DAILY', 'WEEKLY', 'MONTHLY'])
+  @IsOptional()
+  cadence?: string;
+
+  @IsDateString()
+  @IsOptional()
+  periodStart?: string;
+
   @IsString()
   title!: string;
 
@@ -457,7 +470,7 @@ export class CreateGoalDto {
 
   @IsEnum(GoalScope)
   @IsOptional()
-  scope?: GoalScope = GoalScope.COMPANY;
+  scope?: GoalScope;
 
   @IsString()
   @IsOptional()
@@ -482,6 +495,14 @@ export class CreateGoalDto {
 }
 
 export class UpdateGoalDto {
+  @IsIn(['DAILY', 'WEEKLY', 'MONTHLY'])
+  @IsOptional()
+  cadence?: string;
+
+  @IsDateString()
+  @IsOptional()
+  periodStart?: string;
+
   @IsString()
   @IsOptional()
   title?: string;
@@ -512,7 +533,7 @@ export class UpdateGoalDto {
   @IsOptional()
   dueDate?: string;
 
-  @IsString()
+  @IsIn(['ACTIVE', 'COMPLETED', 'CANCELLED'])
   @IsOptional()
   status?: string;
 
@@ -524,6 +545,35 @@ export class UpdateGoalDto {
   @IsNumber()
   @IsOptional()
   kpiWeight?: number;
+}
+
+export class GoalQueryDto extends QueryDto {
+  @IsEnum(GoalScope)
+  @IsOptional()
+  scope?: GoalScope;
+
+  @IsIn(['ACTIVE', 'COMPLETED', 'CANCELLED'])
+  @IsOptional()
+  status?: string;
+}
+
+export class GoalReportQueryDto {
+  @IsIn(['DAILY', 'WEEKLY', 'MONTHLY'])
+  period!: string;
+
+  @IsDateString()
+  date!: string;
+
+  @IsString()
+  @IsOptional()
+  ownerId?: string;
+}
+
+export class GoalProgressDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  currentValue!: number;
 }
 
 // ─── Announcements ────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { RoleName, TaskStatus, TaskPriority } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskCommentDto, CreateTaskDto, UpdateTaskDto } from '../../common/dtos';
@@ -15,7 +15,7 @@ export class TasksService {
   ) {}
 
   list(user: JwtUser) {
-    const where = user.role === RoleName.EMPLOYEE ? { assigneeId: user.sub } : {};
+    const where = ['CEO', 'MANAGER'].includes(user.role) ? {} : { assigneeId: user.sub };
     return this.prisma.task.findMany({
       where,
       include: {
@@ -27,7 +27,7 @@ export class TasksService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: JwtUser) {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
@@ -40,6 +40,9 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException('Task not found');
+    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
+      throw new ForbiddenException('You can only view your assigned tasks');
+    }
     return task;
   }
 
@@ -47,14 +50,17 @@ export class TasksService {
     const assigneeIds = dto.assigneeIds && dto.assigneeIds.length > 0 
       ? dto.assigneeIds 
       : [dto.assigneeId || user.sub];
+    if (!['CEO', 'MANAGER'].includes(user.role) && assigneeIds.some(id => id !== user.sub)) {
+      throw new ForbiddenException('Only managers and the CEO can assign tasks to other employees');
+    }
 
     const tasks = [];
-    for (const rawAssigneeId of assigneeIds) {
+    for (const rawAssigneeId of [...new Set(assigneeIds)]) {
       let assigneeId = rawAssigneeId;
       if (assigneeId) {
         const exists = await this.prisma.user.findUnique({ where: { id: assigneeId } });
         if (!exists) {
-          assigneeId = user.sub;
+          throw new BadRequestException('Selected employee was not found');
         }
       } else {
         assigneeId = user.sub;
@@ -65,6 +71,7 @@ export class TasksService {
           title: dto.title,
           description: dto.description,
           priority: dto.priority ?? TaskPriority.NORMAL,
+          status: dto.status ?? TaskStatus.TODO,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
           assigneeId,
           creatorId: user.sub,
@@ -115,8 +122,11 @@ export class TasksService {
     const task = await this.prisma.task.findUnique({ where: { id } });
     if (!task) throw new NotFoundException('Task not found');
 
-    if (user.role === RoleName.EMPLOYEE && task.assigneeId !== user.sub) {
+    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
       throw new ForbiddenException('You can only update your own tasks');
+    }
+    if (!['CEO', 'MANAGER'].includes(user.role) && dto.assigneeId !== undefined && dto.assigneeId !== user.sub) {
+      throw new ForbiddenException('Only managers and the CEO can reassign tasks');
     }
 
     return this.prisma.task.update({
@@ -126,7 +136,7 @@ export class TasksService {
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.priority ? { priority: dto.priority } : {}),
         ...(dto.dueDate ? { dueDate: new Date(dto.dueDate) } : {}),
-        ...(dto.assigneeId !== undefined && user.role !== RoleName.EMPLOYEE ? { assigneeId: dto.assigneeId } : {}),
+        ...(dto.assigneeId !== undefined && ['CEO', 'MANAGER'].includes(user.role) ? { assigneeId: dto.assigneeId } : {}),
       },
       include: {
         assignee: { select: { id: true, fullName: true, email: true } },
@@ -136,10 +146,11 @@ export class TasksService {
   }
 
   async setStatus(id: string, status: TaskStatus, user: JwtUser) {
+    if (!Object.values(TaskStatus).includes(status)) throw new BadRequestException('Invalid task status');
     const task = await this.prisma.task.findUnique({ where: { id } });
     if (!task) throw new NotFoundException('Task not found');
 
-    if (user.role === RoleName.EMPLOYEE && task.assigneeId !== user.sub) {
+    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
       throw new ForbiddenException('You can only update your assigned tasks');
     }
 
@@ -147,7 +158,7 @@ export class TasksService {
   }
 
   async addComment(taskId: string, dto: CreateTaskCommentDto, user: JwtUser) {
-    await this.findOne(taskId);
+    await this.findOne(taskId, user);
     return this.prisma.taskComment.create({
       data: {
         taskId,
@@ -160,8 +171,8 @@ export class TasksService {
     });
   }
 
-  async getComments(taskId: string) {
-    await this.findOne(taskId);
+  async getComments(taskId: string, user: JwtUser) {
+    await this.findOne(taskId, user);
     return this.prisma.taskComment.findMany({
       where: { taskId },
       include: {
@@ -172,7 +183,7 @@ export class TasksService {
   }
 
   async deleteTask(id: string, user: JwtUser) {
-    if (user.role === RoleName.EMPLOYEE) {
+    if (!['CEO', 'MANAGER'].includes(user.role)) {
       throw new ForbiddenException('Employees cannot delete tasks');
     }
     const task = await this.prisma.task.findUnique({ where: { id } });

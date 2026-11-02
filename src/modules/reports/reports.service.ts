@@ -1,10 +1,50 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
+
+const documentMetadata = { id: true, originalName: true, mimeType: true, sizeBytes: true, createdAt: true } as const;
 
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
+
+  private dailyAccess(user: JwtUser) {
+    return ['CEO', 'MANAGER', 'OUTREACH_MANAGER'].includes(user.role)
+      ? { OR: [{ userId: user.sub }, { status: { in: ['SUBMITTED', 'VERIFIED', 'RETURNED'] } }] }
+      : { userId: user.sub };
+  }
+
+  async findDaily(id: string, user: JwtUser) {
+    const report = await this.prisma.dailyReport.findFirst({
+      where: { AND: [{ id }, this.dailyAccess(user)] },
+      include: {
+        documents: { select: documentMetadata },
+        user: { select: { id: true, fullName: true, email: true, role: true } },
+        reviewer: { select: { id: true, fullName: true, email: true } },
+      },
+    });
+    if (!report) throw new NotFoundException('Report not found');
+    return report;
+  }
+
+  async notifyReviewers(tx: Prisma.TransactionClient, report: { id: string; userId: string; type: string }) {
+    const reviewers = await tx.user.findMany({
+      where: { role: { name: { in: ['CEO', 'MANAGER'] } }, status: 'ACTIVE', id: { not: report.userId } },
+      select: { id: true },
+    });
+    if (reviewers.length) await tx.notification.createMany({ data: reviewers.map(reviewer => ({
+      userId: reviewer.id, title: 'Staff report submitted',
+      body: `A ${report.type.toLowerCase()} work report is ready for review.`, type: 'INFO' as const,
+      link: `/app/reports?reportId=${encodeURIComponent(report.id)}`,
+    })) });
+  }
+
+  private validateSubmission(content: string | undefined, type: string | undefined, status: string | undefined) {
+    if (content !== undefined && (typeof content !== 'string' || !content.trim())) throw new BadRequestException('Report content cannot be empty');
+    if (type && !['DAILY', 'WEEKLY', 'MONTHLY', 'FIELD', 'GENERAL'].includes(type)) throw new BadRequestException('Invalid report type');
+    if (status && !['DRAFT', 'SUBMITTED'].includes(status)) throw new BadRequestException('Reports can only be saved as drafts or submitted for review');
+  }
 
   list() {
     return this.prisma.reportFile.findMany({
@@ -44,51 +84,27 @@ export class ReportsService {
 
   listDaily(user: JwtUser, queryType?: string) {
     const includeUsers = {
+      documents: { select: documentMetadata },
       user: { select: { id: true, fullName: true, email: true, role: true } },
       reviewer: { select: { id: true, fullName: true, email: true, role: true } }
     };
 
-    if (user.role === 'CEO') {
-      return this.prisma.dailyReport.findMany({
-        where: queryType ? { type: queryType } : undefined,
-        orderBy: { date: 'desc' },
-        include: includeUsers
-      });
-    }
-
-    if (user.role === 'MANAGER' || user.role === 'OUTREACH_MANAGER') {
-      return this.prisma.dailyReport.findMany({
-        where: queryType
-          ? { type: queryType }
-          : {
-              OR: [
-                { type: { in: ['DAILY', 'WEEKLY', 'FIELD'] } },
-                { userId: user.sub }
-              ]
-            },
-        orderBy: { date: 'desc' },
-        include: includeUsers
-      });
-    }
-
-    // Default to employee
     return this.prisma.dailyReport.findMany({
-      where: {
-        userId: user.sub,
-        ...(queryType ? { type: queryType } : {})
-      },
+      where: { AND: [this.dailyAccess(user), queryType ? { type: queryType } : {}] },
       orderBy: { date: 'desc' },
       include: includeUsers
     });
   }
 
   async createDaily(body: { content: string; type?: string; loginTime?: string; logoutTime?: string; pdfUrl?: string; status?: string; attachments?: any }, user: JwtUser) {
+    this.validateSubmission(body.content, body.type, body.status);
     if (!body.content || body.content.trim().length === 0) {
       throw new BadRequestException('Report content cannot be empty. Please fill in all required fields.');
     }
     const reportType = body.type || 'DAILY';
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const end = new Date(); end.setHours(23, 59, 59, 999);
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Douala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const start = new Date(`${day}T00:00:00+01:00`);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
     const existing = await this.prisma.dailyReport.findFirst({ where: { userId: user.sub, type: reportType, date: { gte: start, lte: end } } });
     if (existing) throw new BadRequestException('You already submitted this report today. Use revise and resubmit instead.');
 
@@ -107,7 +123,7 @@ export class ReportsService {
         user: { select: { id: true, fullName: true, email: true, role: true } },
         reviewer: { select: { id: true, fullName: true, email: true, role: true } }
       }});
-      if (reportType === 'FIELD') {
+      if (reportType === 'FIELD' && report.status !== 'DRAFT') {
         let metrics: any = {}; try { metrics = JSON.parse(body.content); } catch {}
         const increments: Record<string, number> = {
           'prospecting': Number(metrics.people || 0),
@@ -121,6 +137,7 @@ export class ReportsService {
           if (amount > 0) await tx.goal.update({ where: { id: goal.id }, data: { currentValue: { increment: amount } } });
         }
       }
+      if (report.status === 'SUBMITTED') await this.notifyReviewers(tx, report);
       return report;
     });
   }
@@ -128,6 +145,10 @@ export class ReportsService {
   async updateDaily(id: string, body: { content?: string; type?: string; status?: string; attachments?: any }, user: JwtUser) {
     const existing = await this.prisma.dailyReport.findFirst({ where: { id, userId: user.sub } });
     if (!existing) throw new NotFoundException('Daily report not found.');
+    this.validateSubmission(body.content, body.type, body.status);
+    if (existing.status === 'VERIFIED') throw new BadRequestException('Verified reports cannot be changed. Ask your manager to return the report for correction.');
+    if (existing.status !== 'DRAFT' && body.status === 'DRAFT') throw new BadRequestException('Submitted reports cannot be made private again');
+    if (body.type && body.type !== existing.type) throw new BadRequestException('A saved report cannot change its report type');
     return this.prisma.$transaction(async (tx) => {
       const report = await tx.dailyReport.update({
       where: { id },
@@ -144,9 +165,9 @@ export class ReportsService {
         user: { select: { id: true, fullName: true, email: true, role: true } },
         reviewer: { select: { id: true, fullName: true, email: true, role: true } }
       }});
-      if (existing.type === 'FIELD' && body.content) {
+      if (existing.type === 'FIELD' && body.content && report.status !== 'DRAFT') {
         let before: any = {}; let after: any = {};
-        try { before = JSON.parse(existing.content); } catch {}
+        if (existing.status !== 'DRAFT') { try { before = JSON.parse(existing.content); } catch {} }
         try { after = JSON.parse(body.content); } catch {}
         const keys: Record<string, string> = { prospecting: 'people', 'verified akawo account activations': 'accounts', 'landbanking accounts with first payment': 'transactions', 'customer follow-up within 48 hours': 'followUps' };
         const goals = await tx.goal.findMany({ where: { ownerId: user.sub, scope: 'PERSONAL', status: 'ACTIVE' } });
@@ -158,11 +179,13 @@ export class ReportsService {
           if (delta) await tx.goal.update({ where: { id: goal.id }, data: { currentValue: { increment: delta } } });
         }
       }
+      if (report.status === 'SUBMITTED') await this.notifyReviewers(tx, report);
       return report;
     });
   }
 
   async reviewDaily(id: string, body: { status: string; reviewerComments?: string }, user: JwtUser) {
+    if (!['VERIFIED', 'RETURNED'].includes(body.status)) throw new BadRequestException('Choose verify or return for correction');
     if (user.role !== 'MANAGER' && user.role !== 'OUTREACH_MANAGER' && user.role !== 'CEO') {
       throw new ForbiddenException('Only managers and executives can review and verify field reports.');
     }
@@ -171,6 +194,8 @@ export class ReportsService {
     if (!report) {
       throw new NotFoundException('Daily report not found.');
     }
+    if (report.status === 'DRAFT') throw new ForbiddenException('A draft has not been submitted for review');
+    if (report.userId === user.sub) throw new ForbiddenException('You cannot review your own report');
 
     return this.prisma.dailyReport.update({
       where: { id },
