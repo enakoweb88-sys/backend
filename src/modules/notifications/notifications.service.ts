@@ -60,7 +60,9 @@ export class NotificationsService {
 
     const emailAllowed = recipient?.preference?.emailNotif !== false;
     if (recipient?.email && emailAllowed) {
-      this.mailService.sendNotificationAlert(recipient.email, data.title, data.body, data.link).catch(() => {});
+      this.mailService
+        .sendNotificationAlert(recipient.email, data.title, data.body, data.link)
+        .catch(() => {});
     }
 
     return notif;
@@ -88,7 +90,7 @@ export class NotificationsService {
     if (!users.length) return;
 
     await this.prisma.notification.createMany({
-      data: users.map(u => ({
+      data: users.map((u) => ({
         userId: u.id,
         title: data.title,
         body: data.body,
@@ -101,14 +103,21 @@ export class NotificationsService {
     for (const u of users) {
       const emailAllowed = u.preference?.emailNotif !== false;
       if (u.email && emailAllowed) {
-        this.mailService.sendNotificationAlert(u.email, data.title, data.body, data.link).catch(() => {});
+        this.mailService
+          .sendNotificationAlert(u.email, data.title, data.body, data.link)
+          .catch(() => {});
       }
     }
   }
 
   async deleteRead(userId: string) {
     return this.prisma.notification.deleteMany({
-      where: { userId, readAt: { not: null } },
+      // Keep an unsent report email durable even if the in-app alert was read.
+      where: {
+        userId,
+        readAt: { not: null },
+        OR: [{ emailDelivery: null }, { emailDelivery: { status: { in: ['SENT', 'SKIPPED'] } } }],
+      },
     });
   }
 

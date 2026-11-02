@@ -2,6 +2,26 @@
 
 ## Uploaded work reports
 
+Employee submissions notify managers first. The CEO cannot list, open or download
+employee reports until a manager accepts them. Acceptance records the manager's review
+and notifies the CEO in the same transaction. Returned reports stay with the author
+and management until corrected and accepted. Managers' own reports go directly to the
+CEO because reports cannot be self-approved.
+
+Each report submission, acceptance, correction request and resubmission writes an
+in-system notification and an email-delivery job in the same transaction. A worker
+checks every 10 seconds, records delivery results, and retries temporary failures
+with backoff. Expired leases recover after restarts, and conditional claims prevent
+multiple server instances from delivering the same pending job concurrently.
+Report emails are operational notices; they are queued for every report recipient.
+
+The CEO's `personalEmail` contact is used for notification delivery without changing
+the login `email` or password. Existing mail callers targeting a CEO login address
+are redirected centrally to that contact. Set `OS_APP_URL` to the OS frontend origin
+so notification links open the correct report. Configure Resend or SMTP credentials
+in the deployment environment. Email jobs and report documents require the updated
+Prisma schema; startup revokes public API access to the delivery queue as well.
+
 Work reports accept up to five files of any type, at most 20 MB each. The backend saves
 the original bytes, filenames, sizes and SHA-256 checksums in `report_documents` in the
 same database transaction as the report. Reports and inbox responses fetch metadata only.

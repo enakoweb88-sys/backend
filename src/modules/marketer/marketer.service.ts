@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { reportInboxAccess } from '../reports/report-workflow';
 import { JwtUser } from '../../common/current-user.decorator';
 
 @Injectable()
@@ -189,6 +190,7 @@ export class MarketerService {
       where: {
         userId: targetMarketerId,
         type: 'FIELD',
+        AND: [reportInboxAccess(user)],
         date: { gte: monday, lte: sunday },
       },
     }), this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE' } })]);
@@ -263,7 +265,7 @@ export class MarketerService {
         where: { marketerId: targetMarketerId, followUpDate: { lte: end }, status: { notIn: ['VERIFIED', 'LOST'] } },
         orderBy: { followUpDate: 'asc' }, take: 5,
       }),
-      this.prisma.dailyReport.findFirst({ where: { userId: targetMarketerId, type: 'FIELD', date: { gte: start, lte: end } } }),
+      this.prisma.dailyReport.findFirst({ where: { userId: targetMarketerId, type: 'FIELD', date: { gte: start, lte: end }, AND: [reportInboxAccess(user)] } }),
     ]);
 
     const elapsedDays = Math.max(1, now.getDate());
@@ -293,7 +295,7 @@ export class MarketerService {
     if (!this.isManager(user.role)) throw new ForbiddenException('Only managers can view the team leaderboard');
     const now = new Date(); const start = new Date(now); start.setHours(0, 0, 0, 0); const end = new Date(now); end.setHours(23, 59, 59, 999);
     const reports = await this.prisma.dailyReport.findMany({
-      where: { type: 'FIELD', date: { gte: start, lte: end } },
+      where: { type: 'FIELD', date: { gte: start, lte: end }, AND: [reportInboxAccess(user)] },
       include: { user: { select: { id: true, fullName: true, title: true } } },
     });
     return reports.map((report) => {

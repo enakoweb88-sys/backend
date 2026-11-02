@@ -181,7 +181,7 @@ export class ReportDocumentsService implements OnModuleInit {
                 },
                 include,
               });
-          if (status === 'SUBMITTED') await this.reports.notifyReviewers(tx, report);
+          if (status === 'SUBMITTED') await this.reports.notifyReviewers(tx, report, user.role);
           return report;
         },
         { timeout: 60_000 },

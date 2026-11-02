@@ -25,7 +25,7 @@ function fixture(existing = null) {
   prisma.$transaction = async callback => callback(prisma);
   const reportService = {
     notifyReviewers: async (_tx, report) => notifications.push(report.id),
-    findDaily: async (id, caller) => { const report = reports.find(row => row.id === id && (row.userId === caller.sub || ['CEO', 'MANAGER'].includes(caller.role) && row.status !== 'DRAFT')); if (!report) throw new Error('Report not found'); return result(report); },
+    findDaily: async (id, caller) => { const report = reports.find(row => row.id === id && (row.userId === caller.sub || caller.role === 'MANAGER' && row.status !== 'DRAFT' || caller.role === 'CEO' && row.status === 'VERIFIED')); if (!report) throw new Error('Report not found'); return result(report); },
   };
   return { service: new ReportDocumentsService(prisma, reportService), documents, notifications, reports };
 }
@@ -56,6 +56,8 @@ test('draft files are private to the author, and other employees cannot download
   await assert.rejects(() => f.service.read(report.id, report.documents[0].id, { sub: 'boss', role: 'CEO' }), /not found/);
   await f.service.save({ title: 'Final', status: 'SUBMITTED' }, [], user, report.id);
   await assert.rejects(() => f.service.read(report.id, report.documents[0].id, { sub: 'other', role: 'EMPLOYEE' }), /not found/);
+  await assert.rejects(() => f.service.read(report.id, report.documents[0].id, { sub: 'boss', role: 'CEO' }), /not found/);
+  f.reports[0].status = 'VERIFIED';
   assert.ok((await f.service.read(report.id, report.documents[0].id, { sub: 'boss', role: 'CEO' })).data);
 });
 test('revisions replace selected files and keep ownership and review state consistent', async () => {

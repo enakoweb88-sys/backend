@@ -195,12 +195,14 @@ export class AuthService {
     department?: { name: string } | null;
     ledDepartments?: { name: string }[];
     title?: string | null;
+    personalEmail?: string | null;
   }) {
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       title: user.title ?? null,
+      personalEmail: user.personalEmail ?? null,
       role: user.role.name,
       department: user.department?.name ?? null,
       ledDepartments: user.ledDepartments?.map(d => d.name) || [],

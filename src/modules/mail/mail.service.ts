@@ -12,6 +12,7 @@ import {
 } from './mail.constants';
 import { SendEmailOptions, SendEmailResult } from './mail.interfaces';
 import { buildBrandedEmail } from './templates/email-template.builder';
+import { notificationAddress, notificationLink, escapeEmailText } from './notification-email';
 
 @Injectable()
 export class MailService {
@@ -62,13 +63,26 @@ export class MailService {
    */
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
     const recipients = Array.isArray(options.to) ? options.to : [options.to];
-    const cleanRecipients = recipients
+    let cleanRecipients = recipients
       .map((r) => r?.trim().toLowerCase())
       .filter((r): r is string => Boolean(r && r.includes('@')));
 
     if (cleanRecipients.length === 0) {
       this.logger.warn(`Email sending aborted: No valid recipient email provided for subject "${options.subject}"`);
       return { success: false, error: 'No valid recipient email address' };
+    }
+
+    // The CEO's contact address is separate from the credential used to log in.
+    // Apply the override centrally so existing system/security/task mail callers
+    // that still supply the login address also reach the real inbox.
+    if (this.prisma) {
+      try {
+        const executives = await this.prisma.user.findMany({ where: { email: { in: cleanRecipients }, role: { name: 'CEO' } }, select: { email: true, personalEmail: true } });
+        const overrides = new Map(executives.map(executive => [executive.email.toLowerCase(), notificationAddress(executive)]));
+        cleanRecipients = [...new Set(cleanRecipients.map(address => overrides.get(address) || address))];
+      } catch {
+        return { success: false, error: 'Notification contact lookup failed; delivery can be retried' };
+      }
     }
 
     // Resolve Sender Address under verified domain
@@ -697,18 +711,18 @@ export class MailService {
    * General in-app notification mirror email.
    * From: notifications@mail.enakoos.com | Reply-To: support@enakoos.com
    */
-  async sendNotificationAlert(toEmail: string, title: string, body: string, link?: string) {
+  async sendNotificationAlert(toEmail: string, title: string, body: string, link?: string, options?: { plainText?: boolean }) {
     const html = buildBrandedEmail({
       badge: 'NOTIFICATION',
       badgeColor: '#001f5b',
       headerTitle: 'ENAKO OS',
       headerSubtitle: 'System & Operations Alert',
       headline: title,
-      messageHtml: `<p>${body}</p>`,
+      messageHtml: `<p>${options?.plainText ? escapeEmailText(body) : body}</p>`,
       ctaButton: link
         ? {
             label: 'View Notification Details',
-            url: link.startsWith('http') ? link : `https://enakoos.com#${link}`,
+            url: notificationLink(link, this.config.get<string>('OS_APP_URL') || 'https://enakoos.com'),
           }
         : undefined,
     });
