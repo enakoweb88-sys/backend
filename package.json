@@ -8,7 +8,7 @@
     "dev": "nest start --watch",
     "build": "prisma generate && nest build",
     "start": "node dist/main.js",
-    "start:prod": "prisma db push --accept-data-loss && pm2-runtime start dist/main.js -i max",
+    "start:prod": "sh ./start.sh",
     "lint": "eslint src --ext .ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

@@ -29,15 +29,23 @@ Document downloads require authentication and report access; drafts remain autho
 PDF, common image formats and UTF-8 text have browser previews. Other formats download
 as the original file, without conversion or public sharing links.
 
-Deploy the updated Prisma schema before starting this backend (`prisma db push` is
-already part of `start:prod`). On startup the backend enables row-level security and
-revokes public Data API access to `report_documents`. The database connection must own
-this table so it can apply those protections. No public upload directory or Storage
-bucket is used for these report attachments.
+Application startup now verifies the explicitly listed schema upgrades in
+`src/modules/prisma/runtime-schema.ts` before Nest initializes storage/security hooks.
+This covers Docker, `npm start` and direct `node dist/main.js` launches. The upgrades
+preserve existing records and protect new tables within the same transaction. They
+are safe to run repeatedly and serialize concurrent instance startup. `start:prod`
+uses `start.sh` and no longer runs a general `db push --accept-data-loss`.
+
+The database connection must own these tables so it can apply access protections.
+No public upload directory or Storage bucket is used for report attachments.
 
 Checks: `node --test scripts/test-report-documents.cjs scripts/test-reports.cjs`.
 `node scripts/test-report-storage-db.cjs` verifies binary integrity and the security SQL
 against the configured database using a session-local temporary table only.
+`node scripts/test-runtime-schema-db.cjs` tests startup upgrades against an isolated
+schema that is removed afterwards, including real Prisma document/email-job inserts,
+data preservation and repeat execution. `node scripts/repair-runtime-schema.cjs` can
+apply the same explicit upgrades manually during incident recovery.
 
 Backend server for the ENAKO Cloud System built with Express and TypeScript.
 

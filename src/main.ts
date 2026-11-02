@@ -7,10 +7,16 @@ import helmet from 'helmet';
 import { join } from 'path';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import { PrismaService } from './modules/prisma/prisma.service';
+import { ensureRuntimeSchema } from './modules/prisma/runtime-schema';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
+  // Prepare the shipped schema before Nest runs report-storage security hooks.
+  // This also covers Docker, npm start and direct node dist/main.js launches.
+  await ensureRuntimeSchema(app.get(PrismaService));
+  console.log('Database schema upgrades verified; starting API.');
   const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? [];
 
   app.setGlobalPrefix('api/v1');
