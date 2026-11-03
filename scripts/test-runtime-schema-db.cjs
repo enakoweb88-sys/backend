@@ -19,10 +19,13 @@ async function main() {
     await prisma.$executeRawUnsafe(`INSERT INTO "${schema}".daily_reports VALUES ('existing-report')`);
     await prisma.$executeRawUnsafe(`INSERT INTO "${schema}".notifications VALUES ('existing-notification')`);
     await prisma.$executeRawUnsafe(`INSERT INTO "${schema}".meal_records VALUES ('existing-meal', 'employee', '2026-11-02')`);
+    for (const name of ['messages', 'channels', 'channel_members']) await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "${schema}"."${name}" (id TEXT PRIMARY KEY)`);
     await ensureRuntimeSchema(prisma, schema);
     const connection = new URL(process.env.DATABASE_URL);
     connection.searchParams.set('schema', schema);
     isolated = new PrismaClient({ datasources: { db: { url: connection.toString() } } });
+    const columns = await prisma.$queryRawUnsafe(`SELECT column_name FROM information_schema.columns WHERE table_schema='${schema}' AND table_name='daily_reports'`);
+    assert.ok(columns.some(column => column.column_name === 'ceoCompletedAt'));
     const data = Buffer.from('%PDF-1.7\nExact document bytes\0');
     const file = await isolated.reportDocument.create({ data: { reportId: 'existing-report', originalName: 'test.pdf', mimeType: 'application/pdf', sizeBytes: data.length, sha256: createHash('sha256').update(data).digest('hex'), data } });
     const job = await isolated.notificationEmailDelivery.create({ data: { notificationId: 'existing-notification' } });
@@ -32,8 +35,9 @@ async function main() {
     assert.equal((await isolated.notificationEmailDelivery.findUnique({ where: { id: job.id } })).status, 'PENDING');
     const flags = await prisma.$queryRaw`SELECT c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=${schema} AND c.relname IN ('report_documents','notification_email_deliveries')`;
     assert.equal(flags.length, 2); assert.ok(flags.every(row => row.relrowsecurity));
-    const goals = await isolated.goal.findMany({ select: { id: true, cadence: true, completedAt: true, periodStart: true } });
+    const goals = await isolated.goal.findMany({ select: { id: true, cadence: true, completedAt: true, periodStart: true, targetLabel: true, isKpi: true, kpiWeight: true } });
     assert.equal(goals.length, 1); assert.equal(goals[0].id, 'existing-goal'); assert.equal(goals[0].cadence, null);
+    assert.equal(goals[0].targetLabel, null); assert.equal(goals[0].isKpi, false); assert.equal(goals[0].kpiWeight, null);
     await prisma.$executeRawUnsafe(`INSERT INTO "${schema}".meal_records VALUES ('manager-extra-meal', 'employee', '2026-11-02')`);
     const [meals] = await prisma.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "${schema}".meal_records`);
     assert.equal(meals.count, 2);

@@ -1,5 +1,12 @@
-import { Injectable, OnModuleInit, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  Injectable,
+  OnModuleInit,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from "@nestjs/common";
+import { ensurePrivateConversation } from "./private-chat";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class CommunicationsService implements OnModuleInit {
@@ -11,12 +18,12 @@ export class CommunicationsService implements OnModuleInit {
 
   private async seedInitialChannels() {
     const defaultChannels = [
-      { name: 'general', isGeneral: true },
-      { name: 'operations', isGeneral: true },
-      { name: 'compliance', isGeneral: true },
-      { name: 'finance', isGeneral: true },
-      { name: 'management', isGeneral: true },
-      { name: 'announcements', isGeneral: true },
+      { name: "general", isGeneral: true },
+      { name: "operations", isGeneral: true },
+      { name: "compliance", isGeneral: true },
+      { name: "finance", isGeneral: true },
+      { name: "management", isGeneral: true },
+      { name: "announcements", isGeneral: true },
     ];
 
     for (const ch of defaultChannels) {
@@ -32,43 +39,97 @@ export class CommunicationsService implements OnModuleInit {
     }
   }
 
+  async privateContacts(userId: string) {
+    return this.prisma.user.findMany({
+      where: { status: "ACTIVE", id: { not: userId } },
+      select: { id: true, fullName: true, role: { select: { name: true } } },
+      orderBy: { fullName: "asc" },
+    });
+  }
+
+  async startPrivateConversation(userId: string, recipientId: string) {
+    if (!recipientId || recipientId === userId)
+      throw new ForbiddenException("Choose another employee");
+    const recipient = await this.prisma.user.findFirst({
+      where: { id: recipientId, status: "ACTIVE" },
+    });
+    if (!recipient) throw new NotFoundException("Employee not found");
+    return this.prisma.$transaction((tx) =>
+      ensurePrivateConversation(tx, userId, recipientId),
+    );
+  }
+
   async getAvailableChannels(userId: string) {
-    const user = await this.prisma.user.findUnique({ 
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { role: true, department: true }
+      include: { role: true, department: true },
     });
     if (!user) return [];
 
-    if (user.role?.name === 'CEO' || user.role?.name === 'MANAGER') {
-      return this.prisma.channel.findMany({ orderBy: { name: 'asc' } });
+    if (user.role?.name === "CEO" || user.role?.name === "MANAGER") {
+      return this.prisma.channel.findMany({
+        where: {
+          OR: [
+            { NOT: { name: { startsWith: "dm:" } } },
+            { members: { some: { userId } } },
+          ],
+        },
+        include: {
+          members: {
+            include: { user: { select: { id: true, fullName: true } } },
+          },
+        },
+        orderBy: { name: "asc" },
+      });
     }
 
     const deptName = user.department?.name?.toLowerCase();
 
     return this.prisma.channel.findMany({
+      include: {
+        members: {
+          include: { user: { select: { id: true, fullName: true } } },
+        },
+      },
       where: {
+        AND: [
+          {
+            OR: [
+              { NOT: { name: { startsWith: "dm:" } } },
+              { members: { some: { userId } } },
+            ],
+          },
+        ],
         OR: [
           { isGeneral: true },
           { members: { some: { userId } } },
-          deptName ? { name: deptName } : { id: 'impossible-match' },
+          deptName ? { name: deptName } : { id: "impossible-match" },
         ],
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
     });
   }
 
-  async verifyChannelAccess(channelName: string, userId: string): Promise<boolean> {
+  async verifyChannelAccess(
+    channelName: string,
+    userId: string,
+  ): Promise<boolean> {
     const channel = await this.prisma.channel.findUnique({
       where: { name: channelName },
       include: { members: { where: { userId } } },
     });
 
     if (!channel) return false;
+    if (channelName.startsWith("dm:")) return channel.members.length > 0;
     if (channel.isGeneral) return true;
     return channel.members.length > 0;
   }
 
   async createChannel(name: string, description?: string, isGeneral = false) {
+    if (name.startsWith("dm:"))
+      throw new ForbiddenException(
+        "Private conversations use the direct chat endpoint",
+      );
     const existing = await this.prisma.channel.findUnique({ where: { name } });
     if (existing) {
       throw new ConflictException(`Channel ${name} already exists`);
@@ -84,14 +145,16 @@ export class CommunicationsService implements OnModuleInit {
   }
 
   async getChannelMembers(channelName: string) {
-    const channel = await this.prisma.channel.findUnique({ where: { name: channelName } });
-    if (!channel) throw new NotFoundException('Channel not found');
+    const channel = await this.prisma.channel.findUnique({
+      where: { name: channelName },
+    });
+    if (!channel) throw new NotFoundException("Channel not found");
 
     if (channel.isGeneral) {
       // For general channels, ideally everyone is a member, but we can just return all users or indicate it's general
       // For simplicity, let's return all active users
       return this.prisma.user.findMany({
-        where: { status: 'ACTIVE' },
+        where: { status: "ACTIVE" },
         select: {
           id: true,
           fullName: true,
@@ -117,20 +180,28 @@ export class CommunicationsService implements OnModuleInit {
       },
     });
 
-    return members.map(m => m.user);
+    return members.map((m) => m.user);
   }
 
   async addMember(channelName: string, userId: string) {
-    const channel = await this.prisma.channel.findUnique({ where: { name: channelName } });
-    if (!channel) throw new NotFoundException('Channel not found');
+    if (channelName.startsWith("dm:"))
+      throw new ForbiddenException(
+        "Private conversation membership cannot change",
+      );
+    const channel = await this.prisma.channel.findUnique({
+      where: { name: channelName },
+    });
+    if (!channel) throw new NotFoundException("Channel not found");
 
     if (channel.isGeneral) {
-      throw new ConflictException('Cannot manually add members to a general channel');
+      throw new ConflictException(
+        "Cannot manually add members to a general channel",
+      );
     }
 
     // Check if user exists
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException("User not found");
 
     const existing = await this.prisma.channelMember.findUnique({
       where: {
@@ -152,11 +223,19 @@ export class CommunicationsService implements OnModuleInit {
   }
 
   async removeMember(channelName: string, userId: string) {
-    const channel = await this.prisma.channel.findUnique({ where: { name: channelName } });
-    if (!channel) throw new NotFoundException('Channel not found');
+    if (channelName.startsWith("dm:"))
+      throw new ForbiddenException(
+        "Private conversation membership cannot change",
+      );
+    const channel = await this.prisma.channel.findUnique({
+      where: { name: channelName },
+    });
+    if (!channel) throw new NotFoundException("Channel not found");
 
     if (channel.isGeneral) {
-      throw new ConflictException('Cannot remove members from a general channel');
+      throw new ConflictException(
+        "Cannot remove members from a general channel",
+      );
     }
 
     try {

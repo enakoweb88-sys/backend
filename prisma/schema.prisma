@@ -278,6 +278,9 @@ model DailyReport {
   reviewerId       String?
   reviewerComments String?
   reviewedAt       DateTime?
+  ceoCompletedAt   DateTime?
+  ceoComment       String?
+  ceoReviewerId    String?
   documents        ReportDocument[]
   user             User      @relation("UserDailyReports", fields: [userId], references: [id])
   reviewer         User?     @relation("ReviewedDailyReports", fields: [reviewerId], references: [id])
@@ -483,6 +486,8 @@ model NotificationEmailDelivery {
 }
 
 model Message {
+  reportReferenceId String?
+  reportReferenceTitle String?
   id        String   @id @default(cuid())
   channel   String
   content   String

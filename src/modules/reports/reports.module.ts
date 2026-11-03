@@ -7,5 +7,6 @@ import { ReportAlertsService } from './report-alerts.service';
 @Module({
   controllers: [ReportsController],
   providers: [ReportsService, ReportDocumentsService, ReportAlertsService],
+  exports: [ReportAlertsService],
 })
 export class ReportsModule {}

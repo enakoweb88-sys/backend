@@ -17,25 +17,28 @@ function matches(row, where = {}) {
       if ('gte' in value || 'lte' in value) return (!('gte' in value) || row[key] >= value.gte) && (!('lte' in value) || row[key] <= value.lte);
       return matches(row[key] || {}, value);
     }
-    return row[key] === value;
+    return value === null ? row[key] == null : row[key] === value;
   });
 }
 function fixture(seed = []) {
-  const rows = structuredClone(seed), notifications = [], emailJobs = [];
+  const rows = structuredClone(seed), notifications = [], emailJobs = [], messages = [], channels = [];
   const prisma = {
     dailyReport: {
+      updateMany: async ({ where, data }) => { const row = rows.find(row => matches(row, where)); if (!row) return { count: 0 }; Object.assign(row, data); return { count: 1 }; },
       findMany: async ({ where }) => rows.filter(row => matches(row, where)),
       findFirst: async ({ where }) => rows.find(row => matches(row, where)) || null,
       findUnique: async ({ where }) => rows.find(row => row.id === where.id) || null,
       create: async ({ data }) => { const report = { ...submitted, ...data, id: 'created', user: { role: { name: data.userId === 'manager' ? 'MANAGER' : data.userId === 'ceo' ? 'CEO' : 'EMPLOYEE' } } }; rows.push(report); return report; },
       update: async ({ where, data }) => { const row = rows.find(row => row.id === where.id); Object.assign(row, data); return { ...row }; },
     },
+    channel: { upsert: async ({ create, where }) => { let channel = channels.find(item => item.name === where.name); if (!channel) { channel = { id: 'private', ...create }; channels.push(channel); } return channel; } },
+    message: { create: async ({ data }) => { messages.push(data); return data; } },
     user: { findMany: async query => query.where.role.name.in.map(role => ({ id: role.toLowerCase() })) },
     notification: { createMany: async ({ data }) => notifications.push(...data) },
     notificationEmailDelivery: { createMany: async ({ data }) => emailJobs.push(...data) },
   };
   prisma.$transaction = async callback => callback(prisma);
-  return { service: new ReportsService(prisma, new ReportAlertsService(prisma, {})), rows, notifications, emailJobs, prisma };
+  return { service: new ReportsService(prisma, new ReportAlertsService(prisma, {})), rows, notifications, emailJobs, messages, channels, prisma };
 }
 
 for (const type of ['DAILY', 'WEEKLY', 'MONTHLY']) {
@@ -96,7 +99,7 @@ test('managers can verify a submitted employee report and authors cannot silentl
   const f = fixture([submitted]);
   const report = await f.service.reviewDaily('report', { status: 'VERIFIED', reviewerComments: 'Reviewed' }, manager);
   assert.equal(report.status, 'VERIFIED'); assert.equal(report.reviewerId, manager.sub); assert.equal(report.reviewerComments, 'Reviewed');
-  await assert.rejects(() => f.service.updateDaily('report', { content: 'Changed' }, employee), /Verified reports cannot/);
+  await assert.rejects(() => f.service.updateDaily('report', { content: 'Changed' }, employee), /reports cannot be changed/);
 });
 
 const ceo = { sub: 'ceo', role: 'CEO' };
@@ -105,14 +108,14 @@ test('employee submissions go only to the manager; acceptance forwards to CEO on
   assert.equal((await f.service.listDaily(manager)).length, 1);
   assert.equal((await f.service.listDaily(ceo)).length, 0);
   await assert.rejects(() => f.service.findDaily('report', ceo), /not found/);
-  await assert.rejects(() => f.service.reviewDaily('report', { status: 'VERIFIED' }, ceo), /not found/);
+  await assert.rejects(() => f.service.ceoReview('report', { complete: true }, ceo), /not found/);
   await f.service.reviewDaily('report', { status: 'VERIFIED', reviewerComments: 'Accepted' }, manager);
   assert.equal((await f.service.listDaily(ceo)).length, 1);
   assert.equal((await f.service.findDaily('report', ceo)).reviewerId, manager.sub);
   assert.equal(f.notifications.filter(item => item.userId === 'ceo').length, 1);
   assert.equal(f.emailJobs.length, f.notifications.length);
   assert.ok(f.notifications.some(item => item.userId === employee.sub && item.body.includes('forwarded')));
-  await f.service.reviewDaily('report', { status: 'VERIFIED' }, manager);
+  await assert.rejects(() => f.service.reviewDaily('report', { status: 'VERIFIED' }, manager), /read-only/);
   assert.equal(f.notifications.filter(item => item.userId === 'ceo').length, 1);
 });
 test('returning for correction and resubmitting do not forward to the CEO', async () => {
@@ -126,13 +129,13 @@ test('returning for correction and resubmitting do not forward to the CEO', asyn
   assert.equal(f.notifications.filter(item => item.userId === 'ceo').length, 0);
   await f.service.reviewDaily('report', { status: 'VERIFIED' }, manager);
   assert.equal((await f.service.listDaily(ceo)).length, 1);
-  await f.service.reviewDaily('report', { status: 'RETURNED' }, manager);
-  await assert.rejects(() => f.service.findDaily('report', ceo), /not found/);
+  await assert.rejects(() => f.service.reviewDaily('report', { status: 'RETURNED' }, manager), /read-only/);
+  assert.equal((await f.service.findDaily('report', ceo)).status, 'VERIFIED');
 });
 test('CEO can view accepted staff reports but cannot bypass the manager review stage', async () => {
   const f = fixture([{ ...submitted, status: 'VERIFIED' }]);
   assert.equal((await f.service.findDaily('report', ceo)).status, 'VERIFIED');
-  await assert.rejects(() => f.service.reviewDaily('report', { status: 'RETURNED' }, ceo), /must be accepted by a manager/);
+  await assert.rejects(() => f.service.reviewDaily('report', { status: 'RETURNED' }, ceo), /mark complete/);
 });
 test('manager-authored reports go directly to CEO and cannot be self-approved', async () => {
   const f = fixture();
@@ -140,7 +143,7 @@ test('manager-authored reports go directly to CEO and cannot be self-approved', 
   assert.deepEqual(f.notifications.map(item => item.userId), ['ceo', manager.sub]);
   assert.equal((await f.service.listDaily(ceo)).length, 1);
   await assert.rejects(() => f.service.reviewDaily(report.id, { status: 'VERIFIED' }, manager), /own report/);
-  await f.service.reviewDaily(report.id, { status: 'VERIFIED' }, ceo);
+  await f.service.ceoReview(report.id, { complete: true }, ceo);
   assert.equal(f.notifications.filter(item => item.userId === 'ceo').length, 1);
 });
 test('CEO cannot download a pending employee attachment using a direct file ID', async () => {
@@ -162,4 +165,58 @@ test('field report leaderboards cannot expose pending reports to the CEO', async
   const marketers = new MarketerService(f.prisma);
   assert.deepEqual((await marketers.getDailyLeaderboard(ceo)).map(row => row.reportId), ['accepted']);
   assert.equal((await marketers.getDailyLeaderboard(manager)).length, 2);
+});
+
+
+test('CEO reviews forwarded reports privately and completion is final', async () => {
+  const f = fixture([{ ...submitted, status: 'VERIFIED' }]);
+  await f.service.ceoReview('report', { comment: 'Please add the delivery date' }, ceo);
+  assert.equal(f.rows[0].ceoCompletedAt, undefined);
+  assert.equal(f.messages.length, 1);
+  assert.equal(f.messages[0].reportReferenceId, 'report');
+  assert.equal(f.messages[0].reportReferenceTitle, 'Engineering progress');
+  assert.ok(f.messages[0].channel.startsWith('dm:'));
+  assert.deepEqual(f.channels[0].members.create.map(item => item.userId).sort(), ['ceo', 'engineer']);
+  assert.equal(f.channels[0].isGeneral, false);
+  assert.equal(f.notifications[0].userId, 'engineer');
+  assert.ok(f.notifications[0].link.startsWith('/app/chat?channel='));
+  assert.equal((await f.service.findDaily('report', manager)).ceoComment, null);
+  assert.equal((await f.service.listDaily(manager))[0].ceoComment, null);
+  assert.equal((await f.service.findDaily('report', employee)).ceoComment, 'Please add the delivery date');
+  await f.service.ceoReview('report', { comment: 'Reviewed, thank you', complete: true }, ceo);
+  assert.ok(f.rows[0].ceoCompletedAt);
+  const count = f.notifications.length;
+  await assert.rejects(() => f.service.ceoReview('report', { complete: true }, ceo), /read-only/);
+  assert.equal(f.notifications.length, count);
+  assert.equal(f.rows[0].status, 'VERIFIED');
+});
+
+test('manager reports need CEO comments and completion, with no second approval', async () => {
+  const f = fixture([{ ...submitted, userId: 'manager', user: { role: { name: 'MANAGER' } } }]);
+  await assert.rejects(() => f.service.reviewDaily('report', { status: 'VERIFIED' }, ceo), /mark complete/);
+  await f.service.ceoReview('report', { comment: 'Thank you for your report', complete: true }, ceo);
+  assert.equal(f.messages[0].reportReferenceId, 'report');
+  assert.equal(f.notifications[0].userId, 'manager');
+  assert.deepEqual(f.channels[0].members.create.map(item => item.userId).sort(), ['ceo', 'manager']);
+  assert.equal(f.rows[0].status, 'SUBMITTED');
+  assert.ok(f.rows[0].ceoCompletedAt);
+  await assert.rejects(() => f.service.reviewDaily('report', { status: 'VERIFIED' }, { sub: 'other-manager', role: 'MANAGER' }), /read-only/);
+  await assert.rejects(() => f.service.updateDaily('report', { content: 'Changed report' }, manager), /cannot be changed/);
+});
+
+test('CEO review rejects other roles, pending staff reports, own reports and invalid comments', async () => {
+  const f = fixture([submitted]);
+  await assert.rejects(() => f.service.ceoReview('report', { comment: 'Review' }, manager), /Only the CEO/);
+  await assert.rejects(() => f.service.ceoReview('report', { comment: 'Review' }, ceo), /not found/);
+  await assert.rejects(() => f.service.ceoReview('report', { comment: ' ' }, ceo), /Write a review/);
+  await assert.rejects(() => f.service.ceoReview('report', { comment: 'x'.repeat(10001) }, ceo), /10000/);
+  assert.equal(f.messages.length, 0);
+});
+
+test('stale concurrent completion cannot duplicate a private review or notification', async () => {
+  const f = fixture([{ ...submitted, status: 'VERIFIED' }]);
+  f.prisma.dailyReport.updateMany = async () => ({ count: 0 });
+  await assert.rejects(() => f.service.ceoReview('report', { comment: 'Review', complete: true }, ceo), /Refresh/);
+  assert.equal(f.messages.length, 0);
+  assert.equal(f.notifications.length, 0);
 });

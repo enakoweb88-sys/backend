@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 // This repository predates Prisma migration history. Apply only the explicitly
 // listed, non-destructive upgrades needed by the shipped report features.
@@ -9,11 +9,7 @@ export async function ensureRuntimeSchema(prisma: PrismaClient, schema = 'public
   await prisma.$transaction(async tx => {
     await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '10s'");
     await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(729512431)');
-    await tx.$executeRawUnsafe(`ALTER TABLE ${table('goals')}
-      ADD COLUMN IF NOT EXISTS "cadence" TEXT,
-      ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3),
-      ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3)`);
-    await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "goals_status_completedAt_idx" ON ${table('goals')} ("status", "completedAt")`);
+    await ensureObjectiveSchema(tx, schema);
 
     await tx.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ${table('report_documents')} (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -48,9 +44,17 @@ export async function ensureRuntimeSchema(prisma: PrismaClient, schema = 'public
     await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "notification_email_deliveries_status_nextAttemptAt_idx" ON ${table('notification_email_deliveries')} ("status", "nextAttemptAt")`);
     await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "notification_email_deliveries_status_leaseUntil_idx" ON ${table('notification_email_deliveries')} ("status", "leaseUntil")`);
 
+    await tx.$executeRawUnsafe(`ALTER TABLE ${table('daily_reports')}
+      ADD COLUMN IF NOT EXISTS "ceoCompletedAt" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "ceoComment" TEXT,
+      ADD COLUMN IF NOT EXISTS "ceoReviewerId" TEXT`);
+    await tx.$executeRawUnsafe(`ALTER TABLE ${table('messages')}
+      ADD COLUMN IF NOT EXISTS "reportReferenceId" TEXT,
+      ADD COLUMN IF NOT EXISTS "reportReferenceTitle" TEXT`);
+
     // Keep table creation and access protection in the same transaction, so
     // new report files and delivery jobs are never briefly exposed publicly.
-    for (const name of ['report_documents', 'notification_email_deliveries']) {
+    for (const name of ['report_documents', 'notification_email_deliveries', 'messages', 'channels', 'channel_members']) {
       await tx.$executeRawUnsafe(`ALTER TABLE ${table(name)} ENABLE ROW LEVEL SECURITY`);
       await tx.$executeRawUnsafe(`REVOKE ALL ON ${table(name)} FROM PUBLIC`);
       await tx.$executeRawUnsafe(`DO $$ BEGIN
@@ -69,4 +73,18 @@ export async function ensureRuntimeSchema(prisma: PrismaClient, schema = 'public
     await tx.$executeRawUnsafe(`ALTER TABLE ${table('meal_records')} DROP CONSTRAINT IF EXISTS "meal_records_employeeId_date_key"`);
     await tx.$executeRawUnsafe(`DROP INDEX IF EXISTS ${table('meal_records_employeeId_date_key')}`);
   }, { maxWait: 10_000, timeout: 60_000 });
+}
+
+// Also usable for a targeted objectives repair without applying other feature upgrades.
+export async function ensureObjectiveSchema(tx: Prisma.TransactionClient, schema = 'public') {
+  if (!/^[a-z_][a-z0-9_]*$/.test(schema)) throw new Error('Invalid schema name');
+  const table = (name: string) => `"${schema}"."${name}"`;
+  await tx.$executeRawUnsafe(`ALTER TABLE ${table('goals')}
+      ADD COLUMN IF NOT EXISTS "targetLabel" TEXT,
+      ADD COLUMN IF NOT EXISTS "isKpi" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "kpiWeight" DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS "cadence" TEXT,
+      ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3)`);
+  await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "goals_status_completedAt_idx" ON ${table('goals')} ("status", "completedAt")`);
 }

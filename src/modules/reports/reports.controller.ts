@@ -9,24 +9,24 @@ import {
   UploadedFiles,
   UseInterceptors,
   Res,
-} from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import { Response } from 'express';
+} from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
+import { Response } from "express";
 import {
   ReportDocumentsService,
   REPORT_FILE_COUNT,
   REPORT_FILE_LIMIT,
   previewMimeType,
   attachmentDisposition,
-} from './report-documents.service';
-import { ReportsService } from './reports.service';
-import { JwtAuthGuard } from '../../common/jwt-auth.guard';
-import { RolesGuard } from '../../common/roles.guard';
-import { Roles } from '../../common/roles.decorator';
-import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
+} from "./report-documents.service";
+import { ReportsService } from "./reports.service";
+import { JwtAuthGuard } from "../../common/jwt-auth.guard";
+import { RolesGuard } from "../../common/roles.guard";
+import { Roles } from "../../common/roles.decorator";
+import { CurrentUser, JwtUser } from "../../common/current-user.decorator";
 
-@Controller('reports')
+@Controller("reports")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReportsController {
   constructor(
@@ -35,23 +35,26 @@ export class ReportsController {
   ) {}
 
   @Get()
-  @Roles('CEO', 'MANAGER', 'OUTREACH_MANAGER')
+  @Roles("CEO", "MANAGER", "OUTREACH_MANAGER")
   list() {
     return this.reportsService.list();
   }
 
   @Post()
-  @Roles('CEO', 'MANAGER', 'OUTREACH_MANAGER')
-  generate(@Body() body: { title: string; type: string }, @CurrentUser() user: JwtUser) {
+  @Roles("CEO", "MANAGER", "OUTREACH_MANAGER")
+  generate(
+    @Body() body: { title: string; type: string },
+    @CurrentUser() user: JwtUser,
+  ) {
     return this.reportsService.generate(body.title, body.type, user);
   }
 
-  @Get('daily')
-  listDaily(@CurrentUser() user: JwtUser, @Query('type') type?: string) {
+  @Get("daily")
+  listDaily(@CurrentUser() user: JwtUser, @Query("type") type?: string) {
     return this.reportsService.listDaily(user, type);
   }
 
-  @Post('daily')
+  @Post("daily")
   createDaily(
     @Body()
     body: {
@@ -68,16 +71,20 @@ export class ReportsController {
     return this.reportsService.createDaily(body, user);
   }
 
-  @Get('daily/:id')
-  findDaily(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+  @Get("daily/:id")
+  findDaily(@Param("id") id: string, @CurrentUser() user: JwtUser) {
     return this.reportsService.findDaily(id, user);
   }
 
-  @Post('daily/upload')
+  @Post("daily/upload")
   @UseInterceptors(
-    FilesInterceptor('documents', REPORT_FILE_COUNT, {
+    FilesInterceptor("documents", REPORT_FILE_COUNT, {
       storage: memoryStorage(),
-      limits: { fileSize: REPORT_FILE_LIMIT, files: REPORT_FILE_COUNT, fields: 6 },
+      limits: {
+        fileSize: REPORT_FILE_LIMIT,
+        files: REPORT_FILE_COUNT,
+        fields: 6,
+      },
     }),
   )
   uploadReport(
@@ -95,15 +102,29 @@ export class ReportsController {
     return this.documents.save(body, files || [], user);
   }
 
-  @Post('daily/:id/upload')
+  @Post("daily/:id/ceo-review")
+  @Roles("CEO")
+  ceoReview(
+    @Param("id") id: string,
+    @Body() body: { comment?: string; complete?: boolean },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.reportsService.ceoReview(id, body, user);
+  }
+
+  @Post("daily/:id/upload")
   @UseInterceptors(
-    FilesInterceptor('documents', REPORT_FILE_COUNT, {
+    FilesInterceptor("documents", REPORT_FILE_COUNT, {
       storage: memoryStorage(),
-      limits: { fileSize: REPORT_FILE_LIMIT, files: REPORT_FILE_COUNT, fields: 6 },
+      limits: {
+        fileSize: REPORT_FILE_LIMIT,
+        files: REPORT_FILE_COUNT,
+        fields: 6,
+      },
     }),
   )
   reviseUpload(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body()
     body: {
       title?: string;
@@ -118,41 +139,50 @@ export class ReportsController {
     return this.documents.save(body, files || [], user, id);
   }
 
-  @Get('daily/:id/documents/:documentId')
+  @Get("daily/:id/documents/:documentId")
   async file(
-    @Param('id') id: string,
-    @Param('documentId') documentId: string,
-    @Query('preview') preview: string | undefined,
+    @Param("id") id: string,
+    @Param("documentId") documentId: string,
+    @Query("preview") preview: string | undefined,
     @CurrentUser() user: JwtUser,
     @Res() response: Response,
   ) {
     const document = await this.documents.read(id, documentId, user);
-    response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader(
-      'Content-Type',
-      preview === '1'
+      "Content-Type",
+      preview === "1"
         ? previewMimeType(document.originalName, document.data)
-        : 'application/octet-stream',
+        : "application/octet-stream",
     );
-    response.setHeader('Content-Disposition', attachmentDisposition(document.originalName));
-    response.setHeader('Content-Length', document.data.length);
+    response.setHeader(
+      "Content-Disposition",
+      attachmentDisposition(document.originalName),
+    );
+    response.setHeader("Content-Length", document.data.length);
     response.send(document.data);
   }
 
-  @Post('daily/:id')
+  @Post("daily/:id")
   updateDaily(
-    @Body() body: { content?: string; type?: string; status?: string; attachments?: any },
+    @Body()
+    body: {
+      content?: string;
+      type?: string;
+      status?: string;
+      attachments?: any;
+    },
     @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
+    @Param("id") id: string,
   ) {
     return this.reportsService.updateDaily(id, body, user);
   }
 
-  @Post('daily/:id/review')
-  @Roles('CEO', 'MANAGER', 'OUTREACH_MANAGER')
+  @Post("daily/:id/review")
+  @Roles("CEO", "MANAGER", "OUTREACH_MANAGER")
   reviewDaily(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: { status: string; reviewerComments?: string },
     @CurrentUser() user: JwtUser,
   ) {

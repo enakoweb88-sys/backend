@@ -31,6 +31,8 @@ export class CommunicationsGateway implements OnGatewayConnection, OnGatewayDisc
   /** Client joins a named channel room */
   @SubscribeMessage('channel:join')
   handleJoin(@MessageBody() channel: string, @ConnectedSocket() client: Socket) {
+    // Private conversations are delivered through authenticated HTTP polling only.
+    if (channel.startsWith('dm:')) return { error: 'Use authenticated private chat' };
     client.join(`channel:${channel}`);
     return { joined: channel };
   }
@@ -52,6 +54,7 @@ export class CommunicationsGateway implements OnGatewayConnection, OnGatewayDisc
     @ConnectedSocket() client: Socket,
   ) {
     try {
+      if (payload.channel.startsWith('dm:')) return { error: 'Use authenticated private chat' };
       const message = await this.prisma.message.create({
         data: {
           channel: payload.channel,
