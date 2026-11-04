@@ -67,13 +67,8 @@ export class CashCollectionsService {
       };
     } catch (err) {
       console.error('Error fetching cash collections:', err);
-      return {
-        items: [],
-        total: 0,
-        page: 1,
-        limit: 25,
-        totalPages: 0,
-      };
+      // An outage must not masquerade as an empty authoritative ledger.
+      throw err;
     }
   }
 
