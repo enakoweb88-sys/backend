@@ -347,6 +347,7 @@ model KycDocument {
 }
 
 model Goal {
+  creatorId    String?
   id           String      @id @default(cuid())
   title        String
   description  String?
@@ -373,6 +374,7 @@ model Goal {
   @@index([departmentId])
   @@index([ownerId])
   @@index([status, completedAt])
+  @@index([creatorId])
   @@map("goals")
 }
 

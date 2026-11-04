@@ -1,3 +1,4 @@
+import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { AnalyticsService } from './analytics.service';
@@ -8,8 +9,8 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('overview')
-  overview() {
-    return this.analytics.overview();
+  overview(@CurrentUser() user: JwtUser) {
+    return this.analytics.overview(user);
   }
 
   @Get('health')

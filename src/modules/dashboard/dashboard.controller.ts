@@ -1,12 +1,10 @@
-import { Controller, Get, UseGuards, UseInterceptors, Query } from '@nestjs/common';
-import { CacheInterceptor } from '@nestjs/cache-manager';
+import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)
-@UseInterceptors(CacheInterceptor)
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
 
@@ -16,8 +14,8 @@ export class DashboardController {
   }
 
   @Get('overview')
-  overview() {
-    return this.dashboard.getOverview();
+  overview(@CurrentUser() user: JwtUser) {
+    return this.dashboard.getOverview(user);
   }
 
   @Get('my-stats')
@@ -36,7 +34,7 @@ export class DashboardController {
   }
 
   @Get('engineering')
-  engineeringOverview() {
-    return this.dashboard.getEngineeringOverview();
+  engineeringOverview(@CurrentUser() user: JwtUser) {
+    return this.dashboard.getEngineeringOverview(user);
   }
 }

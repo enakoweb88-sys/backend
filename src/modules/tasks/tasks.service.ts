@@ -1,21 +1,20 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { RoleName, TaskStatus, TaskPriority } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { TaskStatus, TaskPriority } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateTaskCommentDto, CreateTaskDto, UpdateTaskDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
-import { MailService } from '../mail/mail.service';
+import { ReportAlertsService } from '../reports/report-alerts.service';
+import { taskAccess } from './work-access';
 
 @Injectable()
 export class TasksService {
-  private readonly logger = new Logger(TasksService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mailService: MailService,
+    private readonly alerts: ReportAlertsService,
   ) {}
 
   list(user: JwtUser) {
-    const where = ['CEO', 'MANAGER'].includes(user.role) ? {} : { assigneeId: user.sub };
+    const where = taskAccess(user.sub);
     return this.prisma.task.findMany({
       where,
       include: {
@@ -40,7 +39,7 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException('Task not found');
-    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
+    if (task.creatorId !== user.sub && task.assigneeId !== user.sub) {
       throw new ForbiddenException('You can only view your assigned tasks');
     }
     return task;
@@ -54,82 +53,40 @@ export class TasksService {
       throw new ForbiddenException('Only managers and the CEO can assign tasks to other employees');
     }
 
-    const tasks = [];
-    for (const rawAssigneeId of [...new Set(assigneeIds)]) {
-      let assigneeId = rawAssigneeId;
-      if (assigneeId) {
-        const exists = await this.prisma.user.findUnique({ where: { id: assigneeId } });
-        if (!exists) {
-          throw new BadRequestException('Selected employee was not found');
-        }
-      } else {
-        assigneeId = user.sub;
+    return this.prisma.$transaction(async tx => {
+      const tasks = [];
+      const uniqueIds = [...new Set(assigneeIds)];
+      for (const id of uniqueIds) {
+        const person = await tx.user.findUnique({ where: { id }, select: { id: true, status: true } });
+        if (!person || person.status !== 'ACTIVE') throw new BadRequestException('Selected employee was not found or is inactive');
       }
-
-      const task = await this.prisma.task.create({
-        data: {
-          title: dto.title,
-          description: dto.description,
-          priority: dto.priority ?? TaskPriority.NORMAL,
-          status: dto.status ?? TaskStatus.TODO,
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-          assigneeId,
-          creatorId: user.sub,
-        },
-        include: {
-          assignee: { select: { id: true, fullName: true, email: true } },
-          creator: { select: { id: true, fullName: true, email: true } },
-        },
-      });
-      tasks.push(task);
-
-      // Create in-app notification for the assignee
-      if (assigneeId !== user.sub) {
-        await this.prisma.notification.create({
-          data: {
-            userId: assigneeId,
-            title: 'New Task Assigned',
-            body: `You have been assigned a new task: ${task.title}`,
-            type: 'INFO',
-            link: '/tasks',
-          }
-        });
-
-        // Dispatch transactional email via Resend (notifications@mail.enakoos.com)
-        if (task.assignee?.email) {
-          this.mailService
-            .sendTaskAssignedAlert({
-              toEmail: task.assignee.email,
-              assigneeName: task.assignee.fullName || 'Team Member',
-              assignerName: task.creator?.fullName || user.email || 'ENAKO Team',
-              taskTitle: task.title,
-              priority: task.priority,
-              dueDate: task.dueDate,
-              description: task.description,
-            })
-            .catch((err) => {
-              this.logger.error(`Failed to send task assignment email to ${task.assignee?.email}: ${err?.message}`);
-            });
-        }
+      for (const assigneeId of uniqueIds) {
+        const task = await tx.task.create({ data: { title: dto.title, description: dto.description, priority: dto.priority ?? TaskPriority.NORMAL, status: dto.status ?? TaskStatus.TODO, dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined, assigneeId, creatorId: user.sub }, include: { assignee: { select: { id: true, fullName: true, email: true } }, creator: { select: { id: true, fullName: true } } } });
+        tasks.push(task);
+        if (assigneeId !== user.sub) await this.alerts.enqueue(tx, [{ userId: assigneeId, title: 'New Task Assigned', body: 'You have been assigned a new task: ' + task.title, link: '/app/tasks?taskId=' + encodeURIComponent(task.id) }]);
       }
-    }
-
-    // Return first task to maintain backward compatibility with any single-task return callers
-    return tasks[0];
+      return tasks[0];
+    }, { timeout: 30000 });
   }
 
   async update(id: string, dto: UpdateTaskDto, user: JwtUser) {
     const task = await this.prisma.task.findUnique({ where: { id } });
     if (!task) throw new NotFoundException('Task not found');
+    const previousAssigneeId = task.assigneeId;
 
-    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
+    if (task.creatorId !== user.sub && task.assigneeId !== user.sub) {
       throw new ForbiddenException('You can only update your own tasks');
     }
-    if (!['CEO', 'MANAGER'].includes(user.role) && dto.assigneeId !== undefined && dto.assigneeId !== user.sub) {
+    if (dto.assigneeId !== undefined && dto.assigneeId !== previousAssigneeId && (!['CEO', 'MANAGER'].includes(user.role) || task.creatorId !== user.sub)) {
       throw new ForbiddenException('Only managers and the CEO can reassign tasks');
     }
 
-    return this.prisma.task.update({
+    return this.prisma.$transaction(async tx => {
+      if (dto.assigneeId && dto.assigneeId !== previousAssigneeId) {
+        const recipient = await tx.user.findUnique({ where: { id: dto.assigneeId } });
+        if (!recipient || recipient.status !== 'ACTIVE') throw new BadRequestException('Select an active employee');
+      }
+      const updated = await tx.task.update({
       where: { id },
       data: {
         ...(dto.title ? { title: dto.title } : {}),
@@ -143,6 +100,9 @@ export class TasksService {
         creator: { select: { id: true, fullName: true, email: true } },
       },
     });
+      if (dto.assigneeId && dto.assigneeId !== previousAssigneeId && dto.assigneeId !== user.sub) await this.alerts.enqueue(tx, [{ userId: dto.assigneeId, title: 'New Task Assigned', body: 'You have been assigned a new task: ' + updated.title, link: '/app/tasks?taskId=' + encodeURIComponent(updated.id) }]);
+      return updated;
+    }, { timeout: 30000 });
   }
 
   async setStatus(id: string, status: TaskStatus, user: JwtUser) {
@@ -150,7 +110,7 @@ export class TasksService {
     const task = await this.prisma.task.findUnique({ where: { id } });
     if (!task) throw new NotFoundException('Task not found');
 
-    if (!['CEO', 'MANAGER'].includes(user.role) && task.assigneeId !== user.sub) {
+    if (task.creatorId !== user.sub && task.assigneeId !== user.sub) {
       throw new ForbiddenException('You can only update your assigned tasks');
     }
 
@@ -186,8 +146,7 @@ export class TasksService {
     if (!['CEO', 'MANAGER'].includes(user.role)) {
       throw new ForbiddenException('Employees cannot delete tasks');
     }
-    const task = await this.prisma.task.findUnique({ where: { id } });
-    if (!task) throw new NotFoundException('Task not found');
+    await this.findOne(id, user);
     return this.prisma.task.delete({ where: { id } });
   }
 }

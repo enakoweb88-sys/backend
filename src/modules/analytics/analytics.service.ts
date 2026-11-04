@@ -1,3 +1,5 @@
+import { taskAccess } from '../tasks/work-access';
+import { JwtUser } from '../../common/current-user.decorator';
 import { Injectable } from '@nestjs/common';
 import { ExpenseStatus, KycStatus, MealStatus, TaskStatus, TransactionStatus, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async overview() {
+  async overview(user: JwtUser) {
     const [
       employeeCount,
       suspendedCount,
@@ -32,7 +34,7 @@ export class AnalyticsService {
         _sum: { totalAmount: true, companyAmount: true, employeeAmount: true },
         _count: true,
       }),
-      this.prisma.task.count({ where: { status: { not: TaskStatus.DONE } } }),
+      this.prisma.task.count({ where: { AND: [taskAccess(user.sub)], status: { not: TaskStatus.DONE } } }),
       this.prisma.transaction.count({ where: { status: TransactionStatus.FAILED } }),
       this.prisma.supportTicket.count({ where: { status: 'New' } }),
     ]);

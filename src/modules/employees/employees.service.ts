@@ -56,7 +56,7 @@ export class EmployeesService {
     return this.toEmployee(user);
   }
 
-  async create(dto: CreateEmployeeDto) {
+  async create(dto: CreateEmployeeDto, creatorId?: string) {
     const existingEmail = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() }
     });
@@ -115,6 +115,7 @@ export class EmployeesService {
           dueDate: kpi.dueDate ? new Date(kpi.dueDate) : null,
           scope: 'PERSONAL',
           ownerId: user.id,
+          creatorId,
         })),
       });
     }

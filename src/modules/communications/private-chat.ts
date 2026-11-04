@@ -18,6 +18,7 @@ export async function ensurePrivateConversation(
   return tx.channel.upsert({
     where: { name: privateChannelName(first, second) },
     update: {},
+    include: { members: { include: { user: { select: { id: true, fullName: true } } } } },
     create: {
       name: privateChannelName(first, second),
       isGeneral: false,

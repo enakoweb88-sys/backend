@@ -1,3 +1,4 @@
+import { taskAccess, personalGoalAccess } from '../tasks/work-access';
 import { Injectable } from '@nestjs/common';
 import {
   ExpenseStatus,
@@ -138,7 +139,7 @@ export class DashboardService {
             { title: { contains: searchStr, mode: 'insensitive' } },
             { description: { contains: searchStr, mode: 'insensitive' } }
           ],
-          ...(isManagement ? {} : { assigneeId: user.sub })
+          AND: [taskAccess(user.sub)]
         },
         take: 3
       }),
@@ -194,7 +195,7 @@ export class DashboardService {
   }
 
   /** CEO / Manager dashboard: aggregated company-wide stats */
-  async getOverview() {
+  async getOverview(user: JwtUser) {
     const [
       activeEmployees,
       suspendedEmployees,
@@ -243,10 +244,10 @@ export class DashboardService {
         _sum: { totalAmount: true, companyAmount: true, employeeAmount: true },
         _count: true,
       }),
-      this.prisma.task.count({ where: { status: { not: TaskStatus.DONE } } }),
-      this.prisma.task.count({ where: { status: TaskStatus.DONE } }),
-      this.prisma.goal.count({ where: { status: GoalStatus.ACTIVE } }),
-      this.prisma.goal.count({ where: { status: GoalStatus.COMPLETED } }),
+      this.prisma.task.count({ where: { AND: [taskAccess(user.sub)], status: { not: TaskStatus.DONE } } }),
+      this.prisma.task.count({ where: { AND: [taskAccess(user.sub)], status: TaskStatus.DONE } }),
+      this.prisma.goal.count({ where: { AND: [personalGoalAccess(user.sub)], status: GoalStatus.ACTIVE } }),
+      this.prisma.goal.count({ where: { AND: [personalGoalAccess(user.sub)], status: GoalStatus.COMPLETED } }),
     ]);
 
     return {
@@ -331,16 +332,17 @@ export class DashboardService {
   }
 
   /** Real Engineering & Technology Infrastructure Overview */
-  async getEngineeringOverview() {
+  async getEngineeringOverview(user: JwtUser) {
     const [openBugs, featuresInProgress, totalDeployments, systemAuditLogs, devTasks] = await Promise.all([
-      this.prisma.task.count({ where: { status: { not: TaskStatus.DONE } } }),
-      this.prisma.task.count({ where: { status: TaskStatus.IN_PROGRESS } }),
+      this.prisma.task.count({ where: { AND: [taskAccess(user.sub)], status: { not: TaskStatus.DONE } } }),
+      this.prisma.task.count({ where: { AND: [taskAccess(user.sub)], status: TaskStatus.IN_PROGRESS } }),
       this.prisma.auditLog.count({ where: { action: { contains: 'DEPLOY', mode: 'insensitive' } } }),
       this.prisma.auditLog.findMany({
         take: 8,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.task.findMany({
+        where: taskAccess(user.sub),
         orderBy: { dueDate: 'asc' },
         take: 8,
         include: { assignee: { select: { fullName: true, email: true } } }

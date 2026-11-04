@@ -3,6 +3,8 @@ import { GoalStatus, Prisma } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { CreateGoalDto, GoalQueryDto, GoalReportQueryDto, UpdateGoalDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { personalGoalAccess } from '../tasks/work-access';
+import { ReportAlertsService } from '../reports/report-alerts.service';
 import { objectivePeriod } from './objective-period';
 
 const relations = {
@@ -12,14 +14,14 @@ const relations = {
 
 @Injectable()
 export class GoalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly alerts: ReportAlertsService) {}
 
   private canAssign(user: JwtUser) {
     return ['CEO', 'MANAGER'].includes(user.role);
   }
 
   private async visibleTo(user: JwtUser): Promise<Prisma.GoalWhereInput> {
-    if (this.canAssign(user)) return {};
+    if (this.canAssign(user)) return { OR: [{ scope: { not: 'PERSONAL' } }, personalGoalAccess(user.sub)] };
     // Existing access tokens contain no department ID. Use the current HR record.
     const employee = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { departmentId: true } });
     const departmentId = employee?.departmentId;
@@ -71,9 +73,14 @@ export class GoalsService {
     const cadence = dto.cadence ?? 'DAILY';
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Douala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const period = objectivePeriod(cadence, (dto.periodStart || today).slice(0, 10));
-    return this.prisma.goal.create({
+    return this.prisma.$transaction(async tx => {
+    if (ownerId) {
+      const owner = await tx.user.findUnique({ where: { id: ownerId } });
+      if (!owner || owner.status !== 'ACTIVE') throw new BadRequestException('Select an active employee');
+    }
+    const goal = await tx.goal.create({
       data: {
-        title: dto.title, description: dto.description,
+        creatorId: user.sub, title: dto.title, description: dto.description,
         targetValue: dto.targetValue ?? 100, targetLabel: dto.targetLabel,
         currentValue: 0, unit: dto.unit ?? '%', scope,
         departmentId: scope === 'DEPARTMENT' ? dto.departmentId : null,
@@ -82,6 +89,9 @@ export class GoalsService {
         kpiWeight: canAssign ? dto.kpiWeight : undefined,
       }, include: relations,
     });
+    if (ownerId && ownerId !== user.sub) await this.alerts.enqueue(tx, [{ userId: ownerId, title: 'New Objective Assigned', body: 'You have been assigned an objective: ' + goal.title, link: '/app/goals/track' }]);
+    return goal;
+    }, { timeout: 30000 });
   }
 
   async update(id: string, dto: UpdateGoalDto, user: JwtUser) {
@@ -144,6 +154,7 @@ export class GoalsService {
     const items = await this.prisma.goal.findMany({
       where: { AND: [
         { status: GoalStatus.COMPLETED },
+        await this.visibleTo(user),
         this.canAssign(user) ? query.ownerId ? { ownerId: query.ownerId } : {} : { scope: 'PERSONAL', ownerId: user.sub },
         // Legacy records did not store completedAt. Identify the estimate explicitly.
         { OR: [{ completedAt: range }, { completedAt: null, updatedAt: range }] },

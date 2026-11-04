@@ -21,7 +21,7 @@ async function main() {
   const createdIds = [];
   try {
     await prisma.$transaction(async tx => {
-      const service = new GoalsService(tx);
+      const service = new GoalsService({ ...tx, $transaction: callback => callback(tx) });
       for (const cadence of ['DAILY', 'WEEKLY', 'MONTHLY']) {
         const goal = await service.create({ title: 'Temporary objective verification (rolled back)', cadence, periodStart: '2026-11-03' }, { sub: author.id, role: 'EMPLOYEE' });
         createdIds.push(goal.id);

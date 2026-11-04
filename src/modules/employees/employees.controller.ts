@@ -1,3 +1,4 @@
+import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
@@ -23,8 +24,8 @@ export class EmployeesController {
 
   @Post()
   @Roles('CEO', 'MANAGER')
-  create(@Body() dto: CreateEmployeeDto) {
-    return this.employees.create(dto);
+  create(@Body() dto: CreateEmployeeDto, @CurrentUser() user: JwtUser) {
+    return this.employees.create(dto, user.sub);
   }
 
   @Patch(':id')

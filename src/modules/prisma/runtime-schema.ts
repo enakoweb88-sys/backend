@@ -80,11 +80,13 @@ export async function ensureObjectiveSchema(tx: Prisma.TransactionClient, schema
   if (!/^[a-z_][a-z0-9_]*$/.test(schema)) throw new Error('Invalid schema name');
   const table = (name: string) => `"${schema}"."${name}"`;
   await tx.$executeRawUnsafe(`ALTER TABLE ${table('goals')}
+      ADD COLUMN IF NOT EXISTS "creatorId" TEXT,
       ADD COLUMN IF NOT EXISTS "targetLabel" TEXT,
       ADD COLUMN IF NOT EXISTS "isKpi" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "kpiWeight" DECIMAL(5,2),
       ADD COLUMN IF NOT EXISTS "cadence" TEXT,
       ADD COLUMN IF NOT EXISTS "periodStart" TIMESTAMP(3),
       ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3)`);
+  await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "goals_creatorId_idx" ON ${table('goals')} ("creatorId")`);
   await tx.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "goals_status_completedAt_idx" ON ${table('goals')} ("status", "completedAt")`);
 }

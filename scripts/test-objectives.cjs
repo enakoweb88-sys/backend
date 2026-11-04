@@ -11,7 +11,7 @@ const { CreateGoalDto, GoalProgressDto, GoalReportQueryDto } = require('../src/c
 
 const engineer = { sub: 'engineer', role: 'EMPLOYEE', departmentId: 'engineering' };
 const manager = { sub: 'manager', role: 'MANAGER' };
-const own = { id: 'own', title: 'Ship release', scope: 'PERSONAL', ownerId: 'engineer', targetValue: 100, currentValue: 0, status: 'ACTIVE', completedAt: null, updatedAt: new Date('2026-11-01T12:00:00Z') };
+const own = { id: 'own', title: 'Ship release', scope: 'PERSONAL', ownerId: 'engineer', creatorId: 'engineer', targetValue: 100, currentValue: 0, status: 'ACTIVE', completedAt: null, updatedAt: new Date('2026-11-01T12:00:00Z') };
 
 function matches(row, where = {}) {
   return Object.entries(where).every(([key, value]) => {
@@ -19,6 +19,8 @@ function matches(row, where = {}) {
     if (key === 'OR') return value.some(filter => matches(row, filter));
     if (value && typeof value === 'object' && !(value instanceof Date)) {
       if ('contains' in value) return String(row[key] || '').toLowerCase().includes(value.contains.toLowerCase());
+      if ('not' in value) return row[key] !== value.not;
+      if (!('gte' in value) && !('lt' in value)) return matches(row[key] || {}, value);
       if (row[key] == null) return false;
       return (!('gte' in value) || row[key] >= value.gte) && (!('lt' in value) || row[key] < value.lt);
     }
@@ -28,13 +30,14 @@ function matches(row, where = {}) {
 function fixture(seed = []) {
   const rows = structuredClone(seed);
   const queries = [];
-  const prisma = { user: { findUnique: async () => ({ departmentId: 'engineering' }) }, goal: {
+  const prisma = { user: { findUnique: async () => ({ departmentId: 'engineering', status: 'ACTIVE' }) }, goal: {
     findMany: async query => { queries.push(query); const result = rows.filter(row => matches(row, query.where)); return query.take ? result.slice(query.skip || 0, (query.skip || 0) + query.take) : result; },
     findFirst: async query => rows.find(row => matches(row, query.where)) || null,
     create: async ({ data }) => { const goal = { ...own, ...data, id: 'new' }; rows.push(goal); return goal; },
     update: async ({ where, data }) => { const row = rows.find(row => row.id === where.id); Object.assign(row, Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined))); return { ...row }; },
   } };
-  return { service: new GoalsService(prisma), rows, queries };
+  prisma.$transaction = callback => callback(prisma);
+  return { service: new GoalsService(prisma, { enqueue: async () => {} }), rows, queries };
 }
 
 test('engineer creates an objective only for themselves with daily bounds', async () => {
@@ -108,7 +111,7 @@ test('daily reports use Douala midnight and completion date, not due date', asyn
   await assert.rejects(() => f.service.report({ period: 'DAILY', date: '2026-11-02', ownerId: 'other' }, engineer), /only export your own/);
 });
 test('reports include the full completed period without list pagination and managers can select employees', async () => {
-  const rows = Array.from({ length: 80 }, (_, index) => ({ ...own, id: `g${index}`, status: 'COMPLETED', completedAt: new Date('2026-11-04T12:00:00Z') }));
+  const rows = Array.from({ length: 80 }, (_, index) => ({ ...own, creatorId: 'manager', id: `g${index}`, status: 'COMPLETED', completedAt: new Date('2026-11-04T12:00:00Z') }));
   rows.push({ ...own, id: 'manager-goal', ownerId: 'manager', status: 'COMPLETED', completedAt: new Date('2026-11-04T12:00:00Z') });
   const f = fixture(rows);
   assert.equal((await f.service.report({ period: 'MONTHLY', date: '2026-11-02', ownerId: 'engineer' }, manager)).items.length, 80);
@@ -124,14 +127,15 @@ test('DTO validation accepts form dates and rejects unsupported cadence or inval
 function taskFixture() {
   const tasks = [], notices = [], emails = [];
   const prisma = {
-    user: { findUnique: async ({ where }) => ({ id: where.id }) },
+    user: { findUnique: async ({ where }) => ({ id: where.id, status: 'ACTIVE' }) },
     task: {
       create: async ({ data }) => { const result = { id: 'task', ...data, assignee: { email: 'test@example.test' }, creator: {} }; tasks.push(result); return result; },
       findUnique: async () => ({ id: 'other', assigneeId: 'other' }),
     },
     notification: { create: async data => notices.push(data) },
   };
-  const service = new TasksService(prisma, { sendTaskAssignedAlert: async data => emails.push(data) });
+  prisma.$transaction = callback => callback(prisma);
+  const service = new TasksService(prisma, { enqueue: async (_, data) => { notices.push(...data); emails.push(...data); } });
   return { service, tasks, notices, emails };
 }
 test('engineers cannot assign tasks to another employee, including a multi-assignee payload', async () => {

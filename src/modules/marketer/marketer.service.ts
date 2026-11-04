@@ -1,3 +1,4 @@
+import { personalGoalAccess } from '../tasks/work-access';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { reportInboxAccess } from '../reports/report-workflow';
@@ -193,7 +194,7 @@ export class MarketerService {
         AND: [reportInboxAccess(user)],
         date: { gte: monday, lte: sunday },
       },
-    }), this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE' } })]);
+    }), this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE', AND: [personalGoalAccess(user.sub)] } })]);
 
     let peopleApproached = 0;
     let qualifiedProspects = 0;
@@ -260,7 +261,7 @@ export class MarketerService {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
     const [goals, dueLeads, report] = await Promise.all([
-      this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }),
+      this.prisma.goal.findMany({ where: { ownerId: targetMarketerId, scope: 'PERSONAL', status: 'ACTIVE', AND: [personalGoalAccess(user.sub)] }, orderBy: { createdAt: 'asc' } }),
       this.prisma.marketerLead.findMany({
         where: { marketerId: targetMarketerId, followUpDate: { lte: end }, status: { notIn: ['VERIFIED', 'LOST'] } },
         orderBy: { followUpDate: 'asc' }, take: 5,
