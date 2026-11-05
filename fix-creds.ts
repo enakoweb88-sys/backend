@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: "postgresql://postgres.ltdodqloxdpnsvthkowl:enakoos2026@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?connect_timeout=30"
+      url: require('./scripts/maintenance-config.cjs').databaseUrl()
     }
   }
 });

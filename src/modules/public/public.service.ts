@@ -11,12 +11,8 @@ export class PublicService {
     const milestones = await this.prisma.publicMilestone.findMany({ orderBy: { order: 'asc' } });
     const charts = await this.prisma.publicImpactChart.findMany({ orderBy: { order: 'asc' } });
     
-    // Also fetch public reports
-    const reports = await this.prisma.reportFile.findMany({
-      take: 4,
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, title: true, type: true, data: true }
-    });
+    // Internal exports have no publication flag and must never be treated as public reports.
+    const reports: never[] = [];
 
     return {
       stats,
@@ -43,7 +39,7 @@ export class PublicService {
       where: { id }
     });
     
-    if (!scholarship || scholarship.type !== 'SCHOLARSHIP') {
+    if (!scholarship || scholarship.type !== 'SCHOLARSHIP' || !['OPEN', 'SCHEDULED'].includes(scholarship.status)) {
       return null;
     }
     
@@ -63,8 +59,8 @@ export class PublicService {
   }
 
   async getEventById(id: string) {
-    return this.prisma.outreachEvent.findUnique({
-      where: { id }
+    return this.prisma.outreachEvent.findFirst({
+      where: { id, status: { in: ['OPEN', 'SCHEDULED'] } }
     });
   }
 }

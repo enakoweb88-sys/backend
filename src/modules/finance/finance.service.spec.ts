@@ -7,7 +7,7 @@ describe('FinanceService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [FinanceService],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     service = module.get<FinanceService>(FinanceService);
   });

@@ -9,35 +9,8 @@ import { ensurePrivateConversation } from "./private-chat";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
-export class CommunicationsService implements OnModuleInit {
+export class CommunicationsService  {
   constructor(private readonly prisma: PrismaService) {}
-
-  async onModuleInit() {
-    await this.seedInitialChannels();
-  }
-
-  private async seedInitialChannels() {
-    const defaultChannels = [
-      { name: "general", isGeneral: true },
-      { name: "operations", isGeneral: true },
-      { name: "compliance", isGeneral: true },
-      { name: "finance", isGeneral: true },
-      { name: "management", isGeneral: true },
-      { name: "announcements", isGeneral: true },
-    ];
-
-    for (const ch of defaultChannels) {
-      await this.prisma.channel.upsert({
-        where: { name: ch.name },
-        update: { isGeneral: ch.isGeneral },
-        create: {
-          name: ch.name,
-          isGeneral: ch.isGeneral,
-          description: `Default ${ch.name} channel`,
-        },
-      });
-    }
-  }
 
   async privateContacts(userId: string) {
     return this.prisma.user.findMany({
@@ -66,48 +39,9 @@ export class CommunicationsService implements OnModuleInit {
     });
     if (!user) return [];
 
-    if (user.role?.name === "CEO" || user.role?.name === "MANAGER") {
-      return this.prisma.channel.findMany({
-        where: {
-          OR: [
-            { NOT: { name: { startsWith: "dm:" } } },
-            { members: { some: { userId } } },
-          ],
-        },
-        include: {
-          members: {
-            include: { user: { select: { id: true, fullName: true } } },
-          },
-        },
-        orderBy: { name: "asc" },
-      });
-    }
-
-    const deptName = user.department?.name?.toLowerCase();
-
-    return this.prisma.channel.findMany({
-      include: {
-        members: {
-          include: { user: { select: { id: true, fullName: true } } },
-        },
-      },
-      where: {
-        AND: [
-          {
-            OR: [
-              { NOT: { name: { startsWith: "dm:" } } },
-              { members: { some: { userId } } },
-            ],
-          },
-        ],
-        OR: [
-          { isGeneral: true },
-          { members: { some: { userId } } },
-          deptName ? { name: deptName } : { id: "impossible-match" },
-        ],
-      },
-      orderBy: { name: "asc" },
-    });
+    const channels = await this.prisma.channel.findMany({ include: { members: { include: { user: { select: { id: true, fullName: true } } } } }, orderBy: { name: 'asc' } });
+    const allowed = await Promise.all(channels.map(async channel => ({ channel, allowed: await this.verifyChannelAccess(channel.name, userId) })));
+    return allowed.filter(item => item.allowed).map(item => item.channel);
   }
 
   async verifyChannelAccess(
@@ -121,6 +55,11 @@ export class CommunicationsService implements OnModuleInit {
 
     if (!channel) return false;
     if (channelName.startsWith("dm:")) return channel.members.length > 0;
+    if (channel.members.length) return true;
+    // Legacy seed data marked privileged channels general: never trust that flag.
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!user || user.status !== 'ACTIVE') return false;
+    if (['finance', 'management', 'compliance'].includes(channelName)) return ['CEO', 'MANAGER'].includes(user.role.name);
     if (channel.isGeneral) return true;
     return channel.members.length > 0;
   }

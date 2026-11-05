@@ -1,3 +1,4 @@
+import { SecureFilesService, uploadLimits } from '../files/secure-files.service';
 import {
   BadRequestException,
   Body,
@@ -13,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -23,18 +24,11 @@ import { CreateExpenseDto, QueryDto } from '../../common/dtos';
 import { ExpenseStatus } from '@prisma/client';
 import { ExpensesService } from './expenses.service';
 
-const storage = diskStorage({
-  destination: join(process.cwd(), 'uploads', 'receipts'),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `receipt-${uniqueSuffix}${extname(file.originalname)}`);
-  },
-});
 
 @Controller('expenses')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ExpensesController {
-  constructor(private readonly expenses: ExpensesService) {}
+  constructor(private readonly expenses: ExpensesService, private readonly privateFiles: SecureFilesService) {}
 
   @Get()
   list(@Query() query: QueryDto & { status?: string }, @CurrentUser() user: JwtUser) {
@@ -44,25 +38,20 @@ export class ExpensesController {
   @Post()
   @UseInterceptors(
     FileInterceptor('receipt', {
-      storage,
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-      fileFilter: (_req, file, cb) => {
-        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-        if (allowed.includes(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(new BadRequestException('Only images and PDFs are allowed for receipts'), false);
-        }
-      },
+      storage: memoryStorage(),
+      limits: { ...uploadLimits, files: 1 },
     }),
   )
-  create(
+  async create(
     @Body() dto: CreateExpenseDto,
     @CurrentUser() user: JwtUser,
     @UploadedFile() receipt?: Express.Multer.File,
   ) {
-    const receiptUrl = receipt ? `/uploads/receipts/${receipt.filename}` : undefined;
-    return this.expenses.create(dto, user, receiptUrl);
+    const saved = receipt ? await this.privateFiles.save(receipt, 'expense', user.sub, true) : undefined;
+    const receiptUrl = saved ? saved.url : undefined;
+    const record = await this.expenses.create(dto, user, receiptUrl);
+    if (saved) await this.privateFiles.attach(saved.id, record.id);
+    return record;
   }
 
   @Patch(':id/approve')

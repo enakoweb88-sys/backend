@@ -12,13 +12,14 @@ describe('MailService & Resend Integration', () => {
   beforeEach(async () => {
     mockConfigService = {
       get: jest.fn((key: string) => {
-        if (key === 'RESEND_API_KEY') return '';
+        if (key === 'RESEND_API_KEY') return 'fixture-not-a-real-key';
         if (key === 'SECURITY_ALERT_EMAIL') return 'security-test@enakoos.com';
         return undefined;
       }),
     };
 
     mockPrismaService = {
+      user: { findMany: jest.fn().mockResolvedValue([]) },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 'audit-log-1' }),
       },
@@ -33,6 +34,9 @@ describe('MailService & Resend Integration', () => {
     }).compile();
 
     service = module.get<MailService>(MailService);
+    // Exercise real message construction with a mocked provider; never send mail.
+    service['resend'] = { emails: { send: jest.fn().mockResolvedValue({ data: { id: 'fixture-provider-id' }, error: null }) } } as unknown as NonNullable<typeof service['resend']>;
+    service['transporter'] = null;
   });
 
   describe('1. Initialization & Configuration', () => {
@@ -40,15 +44,16 @@ describe('MailService & Resend Integration', () => {
       expect(service).toBeDefined();
     });
 
-    it('should operate safely in simulation mode when RESEND_API_KEY is omitted in non-prod', async () => {
+    it('should report failed delivery when no provider is configured', async () => {
+      service['resend'] = null;
       const result = await service.sendEmail({
         to: 'user@example.com',
         subject: 'Test In Simulation Mode',
         html: '<p>Hello world</p>',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.messageId).toMatch(/^sim_/);
+      expect(result.success).toBe(false);
+      expect(result.messageId).toBeUndefined();
     });
   });
 

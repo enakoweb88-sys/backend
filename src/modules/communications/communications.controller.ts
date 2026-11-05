@@ -197,9 +197,7 @@ export class CommunicationsController {
     // Broadcast to WebSocket clients
     // Ideally we broadcast only to those in the channel, but gateway currently uses emit
     if (!body.channel.startsWith("dm:"))
-      this.gateway.server
-        .to(`channel:${body.channel}`)
-        .emit("message:created", message);
+      await this.gateway.broadcastChannel(body.channel, message);
 
     return message;
   }

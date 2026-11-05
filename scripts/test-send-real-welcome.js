@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer');
 
 async function testSendRealWelcome() {
   const user = 'enakosupport@gmail.com';
-  const pass = 'drsg gmlk hqfz kwev';
+  const pass = process.env.SMTP_PASS;
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',

@@ -1,3 +1,6 @@
+import { Headers } from '@nestjs/common';
+import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CreateTransactionDto, QueryDto } from '../../common/dtos';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -6,54 +9,61 @@ import { RolesGuard } from '../../common/roles.guard';
 import { TransactionsService } from './transactions.service';
 
 @Controller('transactions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('finance.read')
 export class TransactionsController {
   constructor(private readonly transactions: TransactionsService) {}
 
   @Get()
-  @Roles('CEO', 'MANAGER')
+
   list(@Query() query: any) {
     return this.transactions.list(query);
   }
 
   @Post()
-  @Roles('CEO', 'MANAGER')
-  create(@Body() dto: CreateTransactionDto) {
-    return this.transactions.create(dto);
+  @RequirePermission('finance.write')
+
+  create(@Body() dto: CreateTransactionDto, @CurrentUser() actor: JwtUser, @Headers('idempotency-key') key: string) {
+    return this.transactions.create(dto, actor, key);
   }
 
   @Patch(':id/status/:status')
-  @Roles('CEO', 'MANAGER')
-  setStatus(@Param('id') id: string, @Param('status') status: string, @Body('charges') charges?: number) {
-    return this.transactions.setStatus(id, status as any, charges);
+  @RequirePermission('finance.write')
+
+  setStatus(@Param('id') id: string, @Param('status') status: string, @Body('charges') charges: number, @CurrentUser() actor: JwtUser) {
+    return this.transactions.setStatus(id, status as any, charges, actor);
   }
 
   @Patch(':id/settle')
-  @Roles('CEO', 'MANAGER')
-  settle(@Param('id') id: string) {
-    return this.transactions.setStatus(id, 'SETTLED' as any);
+  @RequirePermission('finance.write')
+
+  settle(@Param('id') id: string, @CurrentUser() actor: JwtUser) {
+    return this.transactions.setStatus(id, 'SETTLED' as any, 0, actor);
   }
 
   @Patch(':id/flag')
-  @Roles('CEO', 'MANAGER')
-  flag(@Param('id') id: string) {
-    return this.transactions.setStatus(id, 'FLAGGED' as any);
+  @RequirePermission('finance.write')
+
+  flag(@Param('id') id: string, @CurrentUser() actor: JwtUser) {
+    return this.transactions.setStatus(id, 'FLAGGED' as any, 0, actor);
   }
 
   @Post('float')
-  @Roles('CEO', 'MANAGER')
-  setFloatBalance(@Body('channel') channel: string, @Body('balance') balance: number) {
-    return this.transactions.setFloatBalance(channel, balance);
+  @RequirePermission('finance.write')
+
+  setFloatBalance(@Body('channel') channel: string, @Body('balance') balance: number, @CurrentUser() actor: JwtUser) {
+    return this.transactions.setFloatBalance(channel, balance, actor);
   }
 
   @Get('exchange-rates')
-  @Roles('CEO', 'MANAGER')
+
   getExchangeRates() {
     return this.transactions.getExchangeRates();
   }
 
   @Post('exchange-rates')
-  @Roles('CEO', 'MANAGER')
+  @RequirePermission('finance.write')
+
   saveExchangeRates(@Body() body: any) {
     return this.transactions.saveExchangeRates(body);
   }

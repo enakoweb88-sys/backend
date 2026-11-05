@@ -34,7 +34,7 @@ export class MealsController {
   }
 
   @Patch(':id/dispute')
-  dispute(@Param('id') id: string, @Body('reason') reason: string) {
-    return this.meals.dispute(id, reason);
+  dispute(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser() user: JwtUser) {
+    return this.meals.dispute(id, reason, user);
   }
 }

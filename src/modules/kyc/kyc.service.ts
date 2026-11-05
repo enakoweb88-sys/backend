@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { KycStatus, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { KycReviewDto, QueryDto } from '../../common/dtos';
@@ -25,17 +25,23 @@ export class KycService {
     phone?: string;
     payload: Record<string, unknown>;
     documents?: Array<{ documentType: string; fileName: string; fileUrl: string; mimeType?: string }>;
-  }) {
-    const submission = await this.prisma.kycSubmission.create({
+  }, prepared: Array<any> = []) {
+    const submission = await this.prisma.$transaction(async tx => {
+    const created = await tx.kycSubmission.create({
       data: {
         applicantType: body.applicantType,
         applicantName: body.applicantName,
         email: body.email,
         phone: body.phone,
         payload: body.payload as any,
-        documents: body.documents?.length ? { create: body.documents } : undefined,
+        documents: prepared.length ? { create: prepared.map(file => ({ documentType: file.documentType, fileName: file.fileName, mimeType: file.mimeType, fileUrl: '/api/v1/files/private/' + file.id })) } : undefined,
       },
       include: { documents: true },
+    });
+
+    for (const file of prepared) { const { documentType, ...data } = file; await tx.secureFile.create({ data: { ...data, parentId: created.id, expiresAt: null } }); }
+    await tx.auditLog.create({ data: { action: 'KYC_SUBMITTED', entity: 'kyc', entityId: created.id } });
+    return created;
     });
 
     // Dispatch confirmation email to applicant via Resend (kyc@mail.enakoos.com)
@@ -74,9 +80,17 @@ export class KycService {
   }
 
   async review(id: string, dto: KycReviewDto, user: JwtUser) {
+    if (!['CEO', 'MANAGER'].includes(user.role)) throw new ForbiddenException('KYC review permission required');
+    if (dto.status === KycStatus.APPROVED && user.role !== RoleName.CEO) throw new ForbiddenException('Final KYC approval requires the CEO');
+    const current = await this.prisma.kycSubmission.findUnique({ where: { id }, include: { documents: true } });
+    if (!current) throw new NotFoundException('KYC submission not found');
+    if (current.status === dto.status) return current;
+    if (current.status === KycStatus.APPROVED) throw new ConflictException('Approved KYC is read-only');
+    if (dto.status === KycStatus.APPROVED && current.email?.toLowerCase() === user.email.toLowerCase()) throw new ForbiddenException('You cannot approve your own KYC');
     const approved = dto.status === KycStatus.APPROVED && user.role === RoleName.CEO;
-    const submission = await this.prisma.kycSubmission.update({
-      where: { id },
+    const submission = await this.prisma.$transaction(async tx => {
+    const changed = await tx.kycSubmission.updateMany({
+      where: { id, status: current.status },
       data: {
         status: dto.status as any,
         rejectionReason: dto.rejectionReason,
@@ -84,7 +98,10 @@ export class KycService {
         reviewedAt: new Date(),
         ...(approved ? { approvedById: user.sub, approvedAt: new Date() } : {}),
       },
-      include: { documents: true },
+    });
+    if (changed.count !== 1) throw new ConflictException('KYC review changed concurrently');
+    await tx.auditLog.create({ data: { actorId: user.sub, action: 'KYC_REVIEWED', entity: 'kyc', entityId: id, metadata: { status: dto.status } } });
+    return tx.kycSubmission.findUniqueOrThrow({ where: { id }, include: { documents: true } });
     });
 
     // Transactional KYC decision notifications via Resend (kyc@mail.enakoos.com)

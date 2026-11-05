@@ -1,3 +1,8 @@
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { createHash, randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import { JwtUser } from '../../common/current-user.decorator';
+import { serializable } from '../../common/serializable';
 import { Injectable } from '@nestjs/common';
 import { TransactionStatus } from '@prisma/client';
 import { CreateTransactionDto, QueryDto } from '../../common/dtos';
@@ -158,83 +163,75 @@ export class TransactionsService {
     return this.prisma.transaction.findUnique({ where: { id } });
   }
 
-  async create(dto: CreateTransactionDto) {
-    const isReceiveFloat = dto.type === 'Receive' && dto.channel;
-    const tx = await this.prisma.transaction.create({
-      data: {
-        reference: `ENK-${Date.now()}`,
-        entity: dto.entity,
-        type: dto.type ?? 'Operational',
-        description: dto.description,
-        amount: dto.amount,
-        amountInXaf: dto.amountInXaf,
-        exchangeRate: dto.exchangeRate,
-        currency: dto.currency ?? 'XAF',
-        channel: dto.channel,
-        charges: dto.charges ?? 0,
-        status: isReceiveFloat ? TransactionStatus.SETTLED : TransactionStatus.PENDING,
-        settledAt: isReceiveFloat ? new Date() : null,
-      },
-    });
-
-    if (isReceiveFloat) {
-      await this.updateFloat(dto.channel!, Number(dto.amountInXaf ?? dto.amount), 0, 'in');
-    }
-
-    return tx;
+  private amount(value: unknown, allowZero = false) {
+    let number: Prisma.Decimal;
+    try { number = new Prisma.Decimal(String(value)); } catch { throw new BadRequestException('Invalid monetary amount'); }
+    if (!number.isFinite() || (allowZero ? number.lt(0) : number.lte(0)) || number.decimalPlaces() > 2 || number.gt('999999999999.99')) throw new BadRequestException('Invalid monetary amount');
+    return number;
   }
 
-  async setStatus(id: string, status: TransactionStatus, charges: number = 0) {
-    const tx = await this.prisma.transaction.findUnique({ where: { id } });
-    if (!tx) throw new Error('Transaction not found');
-
-    const updated = await this.prisma.transaction.update({
-      where: { id },
-      data: {
-        status,
-        charges: charges > 0 ? charges : tx.charges,
-        settledAt: status === TransactionStatus.SETTLED ? new Date() : undefined,
-      },
+  async create(dto: CreateTransactionDto, actor: JwtUser, key: string) {
+    if (!actor?.sub) throw new ForbiddenException('Authenticated actor required');
+    if (!key || !/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new BadRequestException('A stable Idempotency-Key of 16?128 characters is required');
+    const amount = this.amount(dto.amount), amountInXaf = this.amount(dto.amountInXaf ?? dto.amount), charges = this.amount(dto.charges ?? 0, true);
+    const currency = (dto.currency || 'XAF').toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) throw new BadRequestException('ISO currency required');
+    const type = dto.type || 'Operational';
+    if (!['Operational', 'Receive', 'Send', 'Income', 'Expense', 'Transfer', 'CREDIT', 'DEBIT'].includes(type)) throw new BadRequestException('Unsupported transaction type');
+    const payload = { entity: dto.entity, amount: amount.toFixed(2), amountInXaf: amountInXaf.toFixed(2), currency, exchangeRate: dto.exchangeRate ?? null, type, channel: dto.channel || null, charges: charges.toFixed(2), description: dto.description || null };
+    const requestHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    const idempotencyKey = createHash('sha256').update('transaction|' + actor.sub + '|' + key).digest('hex');
+    return serializable(this.prisma, async tx => {
+      const existing = await tx.transaction.findUnique({ where: { idempotencyKey } });
+      if (existing) { if (existing.requestHash !== requestHash) throw new ConflictException('Idempotency key was used for a different request'); return existing; }
+      const settled = type === 'Receive' && !!dto.channel;
+      const created = await tx.transaction.create({ data: { entity: dto.entity, description: dto.description, channel: dto.channel, exchangeRate: dto.exchangeRate, amount, amountInXaf, charges, currency, type, idempotencyKey, requestHash, reference: 'ENK-' + randomUUID(), status: settled ? TransactionStatus.SETTLED : TransactionStatus.PENDING, settledAt: settled ? new Date() : null, ledgerAppliedAt: settled ? new Date() : null } });
+      if (settled) await this.applyFloat(tx, dto.channel!, amountInXaf, new Prisma.Decimal(0), 'in');
+      await tx.auditLog.create({ data: { actorId: actor.sub, action: 'FINANCIAL_TRANSACTION_CREATED', entity: 'transaction', entityId: created.id, metadata: { status: created.status } } });
+      return created;
     });
-
-    if (status === TransactionStatus.SETTLED && tx.type === 'Send' && tx.channel) {
-      await this.updateFloat(tx.channel, Number(tx.amountInXaf ?? tx.amount), charges, 'out');
-    }
-
-    return updated;
   }
 
-  async updateFloat(channel: string, amount: number, charges: number, direction: 'in' | 'out') {
-    const float = await this.prisma.floatAccount.upsert({
-      where: { channel },
-      create: { channel, balance: 0, totalIn: 0, totalOut: 0 },
-      update: {}
+  async setStatus(id: string, status: TransactionStatus, charges = 0, actor?: JwtUser) {
+    if (!actor?.sub) throw new ForbiddenException('Authenticated actor required');
+    if (![TransactionStatus.SETTLED, TransactionStatus.FAILED, TransactionStatus.FLAGGED].includes(status as any)) throw new BadRequestException('Invalid transaction transition');
+    const requestedCharges = this.amount(charges, true);
+    return serializable(this.prisma, async tx => {
+      const current = await tx.transaction.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('Transaction not found');
+      if (current.status === status) return current; // Idempotent replay: no second balance/audit effect.
+      if (!['PENDING', 'FLAGGED'].includes(current.status) || (current.status === 'FLAGGED' && status === 'FLAGGED')) throw new ConflictException('Final transaction cannot be reopened');
+      const fee = requestedCharges.gt(0) ? requestedCharges : new Prisma.Decimal(current.charges || 0);
+      const changed = await tx.transaction.updateMany({ where: { id, status: current.status, ledgerAppliedAt: null }, data: { status, charges: fee, ...(status === 'SETTLED' ? { settledAt: new Date(), ledgerAppliedAt: new Date() } : {}) } });
+      if (changed.count !== 1) throw new ConflictException('Transaction changed concurrently or its ledger effect already exists');
+      if (status === 'SETTLED' && current.channel) {
+        const value = this.amount(current.amountInXaf ?? current.amount);
+        if (current.type === 'Send') await this.applyFloat(tx, current.channel, value, fee, 'out');
+        else if (current.type === 'Receive') await this.applyFloat(tx, current.channel, value, new Prisma.Decimal(0), 'in');
+      }
+      await tx.auditLog.create({ data: { actorId: actor.sub, action: 'FINANCIAL_STATUS_CHANGED', entity: 'transaction', entityId: id, metadata: { from: current.status, to: status } } });
+      return tx.transaction.findUniqueOrThrow({ where: { id } });
     });
-
-    if (direction === 'in') {
-      await this.prisma.floatAccount.update({
-        where: { id: float.id },
-        data: {
-          balance: { increment: amount },
-          totalIn: { increment: amount }
-        }
-      });
-    } else {
-      await this.prisma.floatAccount.update({
-        where: { id: float.id },
-        data: {
-          balance: { decrement: amount + charges },
-          totalOut: { increment: amount + charges }
-        }
-      });
-    }
   }
 
-  async setFloatBalance(channel: string, balance: number) {
-    return this.prisma.floatAccount.upsert({
-      where: { channel },
-      create: { channel, balance, totalIn: 0, totalOut: 0 },
-      update: { balance }
+  private async applyFloat(tx: Prisma.TransactionClient, channel: string, amount: Prisma.Decimal, charges: Prisma.Decimal, direction: 'in' | 'out') {
+    if (!channel?.trim() || channel.length > 100) throw new BadRequestException('Valid channel required');
+    const account = await tx.floatAccount.upsert({ where: { channel }, create: { channel, balance: 0, totalIn: 0, totalOut: 0 }, update: {} });
+    if (direction === 'in') return tx.floatAccount.update({ where: { id: account.id }, data: { balance: { increment: amount }, totalIn: { increment: amount } } });
+    const debit = amount.plus(charges);
+    const changed = await tx.floatAccount.updateMany({ where: { id: account.id, balance: { gte: debit } }, data: { balance: { decrement: debit }, totalOut: { increment: debit } } });
+    if (changed.count !== 1) throw new ConflictException('Insufficient float balance');
+  }
+
+  async setFloatBalance(channel: string, balance: number, actor?: JwtUser) {
+    if (actor?.role !== 'CEO') throw new ForbiddenException('Only the CEO may initialize an opening float');
+    const amount = this.amount(balance, true);
+    return serializable(this.prisma, async tx => {
+      const existing = await tx.floatAccount.findUnique({ where: { channel } });
+      if (existing) { if (existing.balance.equals(amount)) return existing; throw new ConflictException('Existing float must be changed through audited ledger transactions'); }
+      const account = await tx.floatAccount.create({ data: { channel, balance: amount, totalIn: amount, totalOut: 0 } });
+      await tx.auditLog.create({ data: { actorId: actor.sub, action: 'FLOAT_OPENED', entity: 'float', entityId: account.id } });
+      return account;
     });
   }
 

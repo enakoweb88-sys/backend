@@ -1,3 +1,6 @@
+import { Throttle } from '@nestjs/throttler';
+import { Roles } from '../../common/roles.decorator';
+import { RolesGuard } from '../../common/roles.guard';
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
@@ -42,6 +45,9 @@ export class NotificationsController {
   }
 
   @Post('email')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CEO')
   async sendEmailNotification(@Body() body: {
     to: string;
     subject?: string;

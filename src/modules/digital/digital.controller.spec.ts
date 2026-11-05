@@ -7,7 +7,7 @@ describe('DigitalController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DigitalController],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     controller = module.get<DigitalController>(DigitalController);
   });

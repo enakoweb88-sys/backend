@@ -1,9 +1,11 @@
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { BdService } from './bd.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('bd')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('bd.manage')
 export class BdController {
   constructor(private readonly bdService: BdService) {}
 

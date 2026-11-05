@@ -9,10 +9,13 @@ interface RequestToPayProps {
   externalId: string;
   payerMessage: string;
   payeeMessage: string;
+  referenceId?: string;
 }
 
 interface PaymentStatusProps {
   referenceId: string;
+  amount: string;
+  currency: string;
   status: 'CREATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
   financialTransactionId: string;
   reason?: string;
@@ -44,12 +47,13 @@ export class MtnService {
 
   async getAuthToken(): Promise<{ token?: string; error?: string }> {
     try {
-      this.logger.log(`Attempting MTN token fetch: baseUrl=${this.baseUrl}, apiUser=${this.apiUser ? '***SET***' : 'EMPTY'}, apiKey=${this.apiKey ? '***SET***' : 'EMPTY'}, primaryKey=${this.primaryKey ? '***SET***' : 'EMPTY'}`);
       
       const response = await axios.post(
         `${this.baseUrl}/collection/token/`,
         {},
         {
+          timeout: 10000,
+          maxRedirects: 0,
           headers: {
             'Ocp-Apim-Subscription-Key': this.primaryKey
           },
@@ -63,18 +67,18 @@ export class MtnService {
       this.logger.log('MTN token fetched successfully');
       return { token: response.data.access_token };
     } catch (error: any) {
-      this.logger.error('Error getting MTN token:', error.response?.status, error.response?.data || error.message);
+      this.logger.error('MTN provider request failed; sensitive response omitted');
       return { error: `Failed to fetch token: ${error.response?.status} - ${JSON.stringify(error.response?.data || error.message)}` };
     }
   }
 
-  async requestToPay({ amount, currency = 'XAF', externalId, payeeMessage, payerMessage, phone }: RequestToPayProps): Promise<{ uuid?: string; data?: any; token?: string; error?: string }> {
+  async requestToPay({ amount, currency = 'XAF', externalId, payeeMessage, payerMessage, phone, referenceId }: RequestToPayProps): Promise<{ uuid?: string; data?: any; token?: string; error?: string }> {
     const { token, error } = await this.getAuthToken();
     if (error || !token) {
       return { error: 'Failed to fetch token' };
     }
 
-    const uuid = crypto.randomUUID();
+    const uuid = referenceId || crypto.randomUUID();
 
     try {
       // Ensure phone number starts with 237 for Cameroon MTN
@@ -109,13 +113,15 @@ export class MtnService {
 
       return { uuid, data: response.data, token };
     } catch (error: any) {
-      this.logger.error('Failed to submit requestToPay:', error.response?.data || error.message);
+      this.logger.error('MTN provider request failed; sensitive response omitted');
       return { error: 'Failed to submit payment' };
     }
   }
 
-  async checkPaymentStatus(uuid: string, token: string): Promise<PaymentStatusProps | null> {
+  async checkPaymentStatus(uuid: string, token?: string): Promise<PaymentStatusProps | null> {
     try {
+      if (!token) token = (await this.getAuthToken()).token;
+      if (!token) return null;
       const response = await axios.get(
         `${this.baseUrl}/collection/v1_0/requesttopay/${uuid}`,
         {
@@ -127,17 +133,18 @@ export class MtnService {
         }
       );
 
-      this.logger.log(`Raw MTN response for ${uuid}: ${JSON.stringify(response.data)}`);
 
       const data = response.data;
       return {
         referenceId: data.externalId,
+        amount: data.amount,
+        currency: data.currency,
         status: data.status,
         financialTransactionId: data.financialTransactionId,
         reason: data.reason?.message
       };
     } catch (error: any) {
-      this.logger.error(`Error checking payment status for ${uuid}:`, error.response?.data || error.message);
+      this.logger.error('MTN provider request failed; sensitive response omitted');
       return null;
     }
   }

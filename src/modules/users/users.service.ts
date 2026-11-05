@@ -3,9 +3,14 @@ import { UserStatus } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { UpdateMeDto } from '../../common/dtos';
 import { PrismaService } from '../prisma/prisma.service';
+import { STAFF_DIRECTORY_SELECT, StaffDirectoryResponseDto, safeResponsibilities } from '../../common/staff-response.dto';
 import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcryptjs';
 import { createClient } from '@supabase/supabase-js';
+import { ConfigService } from '@nestjs/config';
+import { safeUpload } from '../../common/upload-validation';
+import { scanDocument } from '../../common/document-scanner';
+import { ServiceUnavailableException } from '@nestjs/common';
 
 @Injectable()
 export class UsersService {
@@ -14,6 +19,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly config: ConfigService,
   ) {}
 
   async getMe(user: JwtUser) {
@@ -50,18 +56,12 @@ export class UsersService {
       where: { userId: user.sub }
     });
     const badges = metrics.map(m => m.metric).filter((v, i, a) => a.indexOf(v) === i); // Unique metrics as badges
-    if (badges.length === 0) {
-      // Default badges based on role
-      if (user.role === 'CEO') badges.push('Founder', 'Strategic Visionary');
-      else if (user.role === 'MANAGER') badges.push('Efficiency Expert', 'Team Catalyst');
-      else badges.push('Rising Star', 'Reliability Hero');
-    }
 
     return {
       taskCompletion,
       totalGoals,
       completedGoals,
-      networkUptime: 99.9, // Mock but realistic looking
+      networkUptime: null,
       activeTask: activeTask ? {
         title: activeTask.title,
         startedAt: activeTask.updatedAt.toISOString()
@@ -71,37 +71,26 @@ export class UsersService {
   }
 
   async updateMe(user: JwtUser, dto: UpdateMeDto) {
+    if (dto.email && dto.email.toLowerCase() !== user.email.toLowerCase()) throw new BadRequestException('Corporate login email changes require approved administration');
     let finalAvatarUrl = dto.avatarUrl;
 
-    if (dto.avatarUrl && dto.avatarUrl.startsWith('data:image/')) {
-      try {
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-        
-        if (supabaseUrl && supabaseKey) {
-          const supabase = createClient(supabaseUrl, supabaseKey);
-          await supabase.storage.createBucket('avatars', { public: true }).catch(() => {});
-          
-          const matches = dto.avatarUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-          if (matches && matches.length === 3) {
-            const buffer = Buffer.from(matches[2], 'base64');
-            const ext = matches[1].split('/')[1] || 'png';
-            const fileName = `${user.sub}-${Date.now()}.${ext}`;
-            
-            const { error } = await supabase.storage.from('avatars').upload(fileName, buffer, {
-              contentType: matches[1],
-              upsert: true
-            });
-            
-            if (!error) {
-              const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
-              finalAvatarUrl = data.publicUrl;
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to upload avatar to supabase', e);
-      }
+    if (dto.avatarUrl?.startsWith('data:')) {
+      const matches = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dto.avatarUrl);
+      if (!matches || matches[2].length > 1400000) throw new BadRequestException('Avatar must be a PNG, JPEG or WebP image under 1 MB');
+      const buffer = Buffer.from(matches[2], 'base64');
+      if (buffer.toString('base64') !== matches[2] || buffer.length > 1024 * 1024) throw new BadRequestException('Invalid avatar image');
+      const file = safeUpload({ buffer, size: buffer.length, originalname: 'avatar.' + matches[1] } as Express.Multer.File, true);
+      if (!file.mimeType.startsWith('image/')) throw new BadRequestException('Invalid avatar image');
+      await scanDocument(buffer, this.config);
+      const supabaseUrl = this.config.get<string>('SUPABASE_URL'), supabaseKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+      if (!supabaseUrl || !supabaseKey) throw new ServiceUnavailableException('Avatar storage is not configured');
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { error } = await supabase.storage.from('avatars').upload(file.fileName, buffer, { contentType: file.mimeType, upsert: false });
+      if (error) throw new ServiceUnavailableException('Avatar could not be saved');
+      finalAvatarUrl = supabase.storage.from('avatars').getPublicUrl(file.fileName).data.publicUrl;
+    } else if (dto.avatarUrl) {
+      let url: URL; try { url = new URL(dto.avatarUrl); } catch { throw new BadRequestException('Invalid avatar URL'); }
+      if (url.protocol !== 'https:' || url.username || url.password) throw new BadRequestException('Invalid avatar URL');
     }
 
     const updated = await this.prisma.user.update({
@@ -161,6 +150,7 @@ export class UsersService {
   }
 
   async changePassword(user: JwtUser, currentPw: string, newPw: string) {
+    if (!newPw || newPw.length < 12 || Buffer.byteLength(newPw) > 72) throw new BadRequestException('Password must be at least 12 characters and at most 72 UTF-8 bytes');
     const found = await this.prisma.user.findUnique({ where: { id: user.sub } });
     if (!found) throw new NotFoundException('User not found');
 
@@ -168,12 +158,12 @@ export class UsersService {
     if (!valid) throw new BadRequestException('Incorrect current password');
 
     const newHash = await bcrypt.hash(newPw, 12);
-    await this.prisma.user.update({
-      where: { id: user.sub },
-      data: {
-        passwordHash: newHash,
-        passwordChangedAt: new Date()
-      }
+    await this.prisma.$transaction(async tx => {
+      const changed = await tx.user.updateMany({ where: { id: user.sub, passwordHash: found.passwordHash, status: 'ACTIVE' }, data: { passwordHash: newHash, passwordChangedAt: new Date() } });
+      if (changed.count !== 1) throw new BadRequestException('Account changed; sign in again');
+      await tx.authSession.updateMany({ where: { userId: user.sub, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.refreshToken.updateMany({ where: { userId: user.sub, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.auditLog.create({ data: { actorId: user.sub, action: 'PASSWORD_CHANGED', entity: 'user', entityId: user.sub } });
     });
 
     // Dispatch security alert email via Resend (security@mail.enakoos.com)
@@ -200,17 +190,20 @@ export class UsersService {
     });
     if (!found) throw new NotFoundException('User not found');
     
-    // Clean up sensitive data before exporting
-    const { passwordHash, ...cleanData } = found;
     return {
       type: 'Archive',
       timestamp: new Date(),
-      data: cleanData
+      data: {
+        ...this.toPublic(found), employmentType: found.employmentType, salary: found.salary,
+        hireDate: found.hireDate, responsibilities: safeResponsibilities(found.responsibilities),
+        goals: found.goalsText,
+        activityLogs: found.activityLogs.map(log => ({ action: log.action, module: log.module, createdAt: log.createdAt })),
+      }
     };
   }
 
   async listAll(search?: string) {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: {
         status: { not: UserStatus.DELETED },
         ...(search
@@ -222,9 +215,10 @@ export class UsersService {
             }
           : {}),
       },
-      include: { role: true, department: true },
+      select: STAFF_DIRECTORY_SELECT,
       orderBy: { createdAt: 'desc' },
     });
+    return users.map(user => new StaffDirectoryResponseDto(user));
   }
 
   async getById(id: string) {

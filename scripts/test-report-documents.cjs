@@ -27,7 +27,7 @@ function fixture(existing = null) {
     notifyReviewers: async (_tx, report) => notifications.push(report.id),
     findDaily: async (id, caller) => { const report = reports.find(row => row.id === id && (row.userId === caller.sub || caller.role === 'MANAGER' && row.status !== 'DRAFT' || caller.role === 'CEO' && row.status === 'VERIFIED')); if (!report) throw new Error('Report not found'); return result(report); },
   };
-  return { service: new ReportDocumentsService(prisma, reportService), documents, notifications, reports };
+  return { service: new ReportDocumentsService(prisma, reportService, { scan: async () => {} }), documents, notifications, reports };
 }
 
 test('original binary and metadata are persisted together; report responses exclude bytes', async () => {
@@ -106,6 +106,8 @@ test('download controller returns original bytes with private authenticated resp
   await controller.file(saved.id, saved.documents[0].id, '1', user, response);
   assert.equal(headers['Content-Type'], 'application/pdf');
 });
-test('startup applies row-level security for document binary storage', async () => {
-  await fixture().service.onModuleInit();
+test('runtime cannot perform schema DDL; private storage policy is in reviewed migration', () => {
+  assert.equal(fixture().service.onModuleInit, undefined);
+  const sql = require('node:fs').readFileSync(require('node:path').join(__dirname, '../prisma/migrations/20261105000300_private_api/migration.sql'), 'utf8');
+  assert.ok(sql.includes('report_documents')); assert.ok(sql.includes('ENABLE ROW LEVEL SECURITY')); assert.ok(sql.includes('REVOKE ALL'));
 });

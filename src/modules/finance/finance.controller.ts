@@ -1,9 +1,11 @@
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('finance')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('finance.read')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 

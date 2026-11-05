@@ -1,0 +1,30 @@
+name: Security and build verification
+on:
+  pull_request:
+  push:
+    branches: [main, 'security/**']
+permissions:
+  contents: read
+concurrency:
+  group: verification-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run prisma:generate
+      - run: npm run verify
+      - run: node scripts/dependency-audit.cjs --production
+      - run: npm audit --audit-level=high
+# Verification only. No hosting tokens, deployment commands or production jobs.

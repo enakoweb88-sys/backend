@@ -1,3 +1,5 @@
+import { uploadLimits } from '../../common/upload-validation';
+import { CashFilesService } from './cash-files.service';
 import {
   BadRequestException,
   Body,
@@ -13,118 +15,122 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname, join } from 'path';
-import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
-import { JwtAuthGuard } from '../../common/jwt-auth.guard';
-import { Roles } from '../../common/roles.decorator';
-import { RolesGuard } from '../../common/roles.guard';
-import { CreateCashCollectionDto, QueryDto, UpdateCashCollectionStatusDto } from '../../common/dtos';
+import { CurrentUser } from '../../common/current-user.decorator';
+import { QueryDto } from '../../common/dtos';
 import { CashCollectionsService } from './cash-collections.service';
+import { ThrottlerGuard } from '@nestjs/throttler';
+import { CashAccessGuard } from './cash-access.guard';
+import { CashPrincipal, RequireCashPermission } from './cash-access';
+import { CashClientDto, CashCollectionDto, CashReceiptDto, CashStatusDto, CreateCollectorDto, DeactivateCollectorDto } from './cash.dto';
+import { CashResponseInterceptor } from './cash-response.interceptor';
 
-const storage = diskStorage({
-  destination: join(process.cwd(), 'uploads', 'collections'),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `collection-${uniqueSuffix}${extname(file.originalname)}`);
-  },
-});
 
 @Controller('cash-collections')
+@UseGuards(CashAccessGuard)
+@UseInterceptors(CashResponseInterceptor)
 export class CashCollectionsController {
-  constructor(private readonly cashCollections: CashCollectionsService) {}
+  constructor(private readonly cashCollections: CashCollectionsService, private readonly privateFiles: CashFilesService) {}
 
   @Get()
+  @RequireCashPermission('records.read')
   list(
     @Query() query: QueryDto & { status?: string; collectorId?: string },
-    @CurrentUser() user?: JwtUser,
+    @CurrentUser() user: CashPrincipal,
   ) {
     return this.cashCollections.list(query, user);
   }
 
   @Get('stats')
-  getStats() {
-    return this.cashCollections.getStats();
+  @RequireCashPermission('records.read')
+  getStats(@CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.getStats(user);
   }
 
   @Get('collectors')
-  listCollectors() {
-    return this.cashCollections.listCollectors();
+  @RequireCashPermission('collectors.manage')
+  listCollectors(@CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.listCollectors(user);
   }
 
   @Get('clients')
-  listClients() {
-    return this.cashCollections.listClients();
+  @RequireCashPermission('clients.read')
+  listClients(@CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.listClients(user);
   }
 
   @Post('clients')
-  createClient(@Body() dto: any) {
-    return this.cashCollections.createClient(dto);
+  @RequireCashPermission('clients.create')
+  createClient(@Body() dto: CashClientDto, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.createClient(dto, user);
   }
 
   @Post('collectors')
-  createCollector(@Body() dto: any) {
-    return this.cashCollections.createCollector(dto);
+  @RequireCashPermission('collectors.manage')
+  createCollector(@Body() dto: CreateCollectorDto, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.createCollector(dto, user);
   }
 
   @Delete('collectors/:id')
-  deleteCollector(@Param('id') id: string) {
-    return this.cashCollections.deleteCollector(id);
+  @RequireCashPermission('collectors.manage')
+  deleteCollector(@Param('id') id: string, @Body() body: DeactivateCollectorDto, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.deleteCollector(id, body, user);
   }
 
   @Delete('collectors')
-  deleteAllCollectors() {
-    return this.cashCollections.deleteAllCollectors();
+  @RequireCashPermission('collectors.manage')
+  deleteAllCollectors(@CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.deleteAllCollectors(user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.cashCollections.findOne(id);
+  @RequireCashPermission('records.read')
+  findOne(@Param('id') id: string, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.findOne(id, user);
   }
 
   @Post()
+  @RequireCashPermission('records.create')
   @UseInterceptors(
     FileInterceptor('receipt', {
-      storage,
-      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-      fileFilter: (_req, file, cb) => {
-        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-        if (allowed.includes(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(new BadRequestException('Only images and PDFs are allowed for deposit receipts'), false);
-        }
-      },
+      storage: memoryStorage(),
+      limits: { ...uploadLimits, files: 1 },
     }),
   )
-  create(
-    @Body() dto: CreateCashCollectionDto,
-    @CurrentUser() user?: JwtUser,
+  async create(
+    @Body() dto: CashCollectionDto,
+    @CurrentUser() user: CashPrincipal,
     @UploadedFile() receipt?: Express.Multer.File,
   ) {
-    const receiptUrl = receipt ? `/uploads/collections/${receipt.filename}` : undefined;
-    return this.cashCollections.create(dto, user, receiptUrl);
+    const saved = receipt ? await this.privateFiles.save(receipt, 'cash', user.sub, true) : undefined;
+    const receiptUrl = saved ? '/api/v1/cash-collections/documents/' + saved.id : undefined;
+    const record = await this.cashCollections.create(dto, user, receiptUrl);
+    if (saved) await this.privateFiles.attach(saved.id, record.id);
+    return record;
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateCashCollectionStatusDto) {
-    return this.cashCollections.updateStatus(id, dto);
+  @RequireCashPermission('records.update')
+  updateStatus(@Param('id') id: string, @Body() dto: CashStatusDto, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.updateStatus(id, dto, user);
+  }
+
+  @Post(':id/receipt')
+  @RequireCashPermission('records.update')
+  @UseInterceptors(FileInterceptor('receipt', { storage: memoryStorage(), limits: { ...uploadLimits, files: 1 } }))
+  async attachReceipt(@Param('id') id: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: CashPrincipal) {
+    await this.cashCollections.findOne(id, user);
+    const stored = await this.privateFiles.save(file, 'cash', user.sub, true);
+    const url = '/api/v1/cash-collections/documents/' + stored.id;
+    const result = await this.cashCollections.attachReceipt(id, url, user);
+    await this.privateFiles.attach(stored.id, id);
+    return result;
   }
 
   @Post('send-receipt')
-  sendReceipt(@Body() body: {
-    toEmail: string;
-    clientName: string;
-    collectionId: string;
-    amount: number;
-    currency?: string;
-    collectorName?: string;
-    location?: string;
-    status?: string;
-    time?: string;
-    depositDestination?: string;
-    pdfBase64?: string;
-  }) {
-    return this.cashCollections.sendReceiptEmail(body);
+  @RequireCashPermission('receipts.send')
+  sendReceipt(@Body() body: CashReceiptDto, @CurrentUser() user: CashPrincipal) {
+    return this.cashCollections.sendReceiptEmail(body, user);
   }
 }

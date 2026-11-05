@@ -9,7 +9,7 @@ import { notificationAddress } from '../mail/notification-email';
 type ReportAlert = { userId: string; title: string; body: string; type?: 'INFO'; link: string };
 
 @Injectable()
-export class ReportAlertsService implements OnModuleInit {
+export class ReportAlertsService {
   private readonly logger = new Logger(ReportAlertsService.name);
   private running = false;
   constructor(
@@ -17,18 +17,7 @@ export class ReportAlertsService implements OnModuleInit {
     private readonly mail: MailService,
   ) {}
 
-  async onModuleInit() {
-    await this.prisma.$executeRawUnsafe(`DO $$ BEGIN
-      ALTER TABLE public.notification_email_deliveries ENABLE ROW LEVEL SECURITY;
-      REVOKE ALL ON public.notification_email_deliveries FROM PUBLIC;
-      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        REVOKE ALL ON public.notification_email_deliveries FROM anon;
-      END IF;
-      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-        REVOKE ALL ON public.notification_email_deliveries FROM authenticated;
-      END IF;
-    END $$;`);
-  }
+
 
   // Called inside the report's transaction: either the report, inbox alert and
   // email job all commit, or none of them do. No email is sent before commit.

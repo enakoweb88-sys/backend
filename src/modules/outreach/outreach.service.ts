@@ -1,3 +1,6 @@
+import { SecureFilesService } from '../files/secure-files.service';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { DonationPaymentsService } from './donation-payments.service';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { createClient } from '@supabase/supabase-js';
@@ -10,7 +13,9 @@ export class OutreachService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mtnService: MtnService,
-    private readonly pixiPayService: PixiPayService
+    private readonly pixiPayService: PixiPayService,
+    private readonly files: SecureFilesService,
+    private readonly payments: DonationPaymentsService
   ) {}
 
   private async uploadToSupabase(base64Data: string, prefix: string): Promise<string | null> {
@@ -50,123 +55,10 @@ export class OutreachService {
     return null;
   }
 
-  async createDonation(data: any) {
-    const documentUrls: string[] = [];
-    if (data.documents && Array.isArray(data.documents)) {
-      for (const docBase64 of data.documents) {
-        const url = await this.uploadToSupabase(docBase64, 'donation-receipt');
-        if (url) documentUrls.push(url);
-      }
-    } else if (data.documentBase64) {
-      // Single file upload fallback
-      const url = await this.uploadToSupabase(data.documentBase64, 'donation-receipt');
-      if (url) documentUrls.push(url);
-    }
+  createDonation(data: any, key?: string) { return this.payments.create(data, key); }
+  getDonationStatus(uuid: string, token: string | undefined, id: string) { return this.payments.status(uuid, token, id); }
 
-    const { documents, documentBase64, phone, ...cleanData } = data;
-    
-    // Create the donation record with PENDING status initially
-    const donation = await this.prisma.donation.create({
-      data: {
-        ...cleanData,
-        phone,
-        documents: documentUrls,
-        status: cleanData.method === 'BANK' ? 'PENDING' : 'PENDING'
-      }
-    });
-
-    if (cleanData.method === 'MTN') {
-      const response = await this.mtnService.requestToPay({
-        amount: cleanData.amount,
-        currency: cleanData.currency,
-        externalId: donation.id,
-        phone: phone || '', // Ensure it has 237 prefix usually
-        payerMessage: `Donation for ${cleanData.sector}`,
-        payeeMessage: 'Thank you for your donation'
-      });
-
-      if (response.error || !response.uuid) {
-        // Mark as failed
-        console.error('MTN Payment initiation failed:', response.error);
-        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new BadRequestException(response.error || 'Failed to initiate MTN Payment');
-      }
-
-      return {
-        donation,
-        paymentToken: response.token,
-        paymentUuid: response.uuid,
-        status: 'PENDING'
-      };
-    } else if (cleanData.method === 'ORANGE') {
-      const webhookUrl = process.env.WEBHOOK_BASE_URL 
-        ? `${process.env.WEBHOOK_BASE_URL}/outreach/donations/webhook/orange` 
-        : undefined;
-      
-      const response = await this.pixiPayService.requestToPay({
-        amount: cleanData.amount,
-        phone: phone || '',
-        externalId: donation.id,
-        description: `Donation for ${cleanData.sector}`,
-        callbackUrl: webhookUrl
-      });
-
-      if (response.error || !response.uuid) {
-        console.error('PixiPay Payment initiation failed:', response.error);
-        await this.prisma.donation.update({ where: { id: donation.id }, data: { status: 'FAILED' } });
-        throw new BadRequestException(response.error || 'Failed to initiate Orange Money Payment');
-      }
-
-      return {
-        donation,
-        paymentUuid: response.uuid,
-        status: 'PENDING'
-      };
-    }
-
-    // For Bank transfer, we can just return it as pending or completed based on your flow
-    return {
-      donation,
-      status: 'PENDING' // They will contact via email
-    };
-  }
-
-  async getDonationStatus(uuid: string, token: string | undefined, donationId: string) {
-    const donation = await this.prisma.donation.findUnique({ where: { id: donationId } });
-    if (!donation) return { status: 'UNKNOWN' };
-
-    let result: any = null;
-    
-    if (donation.method === 'MTN') {
-      result = await this.mtnService.checkPaymentStatus(uuid, token || '');
-    } else if (donation.method === 'ORANGE') {
-      result = await this.pixiPayService.checkPaymentStatus(uuid);
-    }
-
-    if (!result) {
-      return { status: 'UNKNOWN' };
-    }
-
-    const moMoStatus = result.status;
-    
-    if (moMoStatus === 'SUCCESSFUL') {
-      await this.prisma.donation.update({
-        where: { id: donationId },
-        data: { status: 'SETTLED' }
-      });
-      return { status: 'SETTLED' };
-    } else if (moMoStatus === 'FAILED') {
-      await this.prisma.donation.update({
-        where: { id: donationId },
-        data: { status: 'FAILED' }
-      });
-      return { status: 'FAILED', reason: result.reason || 'Payment failed' };
-    }
-
-    return { status: 'PENDING' };
-  }
-
-  async globalSearch(query: string) {
+  async globalSearch(query: string, internal = false) {
     if (!query || query.trim() === '') {
       return [];
     }
@@ -186,6 +78,7 @@ export class OutreachService {
       }),
       this.prisma.outreachEvent.findMany({
         where: {
+          ...(internal ? {} : { status: { in: [OutreachEventStatus.OPEN, OutreachEventStatus.SCHEDULED] } }),
           OR: [
             { title: { contains: searchStr, mode: 'insensitive' } },
             { description: { contains: searchStr, mode: 'insensitive' } },
@@ -196,6 +89,7 @@ export class OutreachService {
       }),
       this.prisma.blogPost.findMany({
         where: {
+          ...(internal ? {} : { status: 'PUBLISHED' }),
           OR: [
             { title: { contains: searchStr, mode: 'insensitive' } },
             { content: { contains: searchStr, mode: 'insensitive' } }
@@ -203,7 +97,7 @@ export class OutreachService {
         },
         take: 5
       }),
-      this.prisma.outreachApplication.findMany({
+      internal ? this.prisma.outreachApplication.findMany({
         where: {
           OR: [
             { applicantName: { contains: searchStr, mode: 'insensitive' } },
@@ -211,7 +105,7 @@ export class OutreachService {
           ]
         },
         take: 5
-      }),
+      }) : Promise.resolve([]),
       this.prisma.publicImpactStat.findMany({
         where: {
           OR: [
@@ -264,54 +158,8 @@ export class OutreachService {
     return results;
   }
 
-  async handleOrangeWebhook(payload: any) {
-    console.log('Received PixiPay Webhook:', payload);
-    const reference = payload.reference;
-    let status: any = 'UNKNOWN';
-
-    if (['SUCCESS', 'COMPLETED', 'SUCCESSFUL'].includes(payload.status?.toUpperCase())) {
-      status = 'SETTLED';
-    } else if (['FAILED', 'ERROR', 'REJECTED'].includes(payload.status?.toUpperCase())) {
-      status = 'FAILED';
-    }
-
-    if (reference && status !== 'UNKNOWN') {
-      try {
-        await this.prisma.donation.update({
-          where: { id: reference },
-          data: { status }
-        });
-      } catch (err) {
-        console.error('Failed to update donation from Orange webhook', err);
-      }
-    }
-    return { received: true };
-  }
-
-  async handleMtnWebhook(payload: any) {
-    console.log('Received MTN Webhook:', payload);
-    const externalId = payload.externalId;
-    const moMoStatus = payload.status;
-    let status: any = 'UNKNOWN';
-
-    if (moMoStatus === 'SUCCESSFUL') {
-      status = 'SETTLED';
-    } else if (moMoStatus === 'FAILED') {
-      status = 'FAILED';
-    }
-
-    if (externalId && status !== 'UNKNOWN') {
-      try {
-        await this.prisma.donation.update({
-          where: { id: externalId },
-          data: { status }
-        });
-      } catch (err) {
-        console.error('Failed to update donation from MTN webhook', err);
-      }
-    }
-    return { received: true };
-  }
+  async handleOrangeWebhook(_payload: unknown) { throw new ServiceUnavailableException('Orange callback contract is not verified; no payment state changed'); }
+  handleMtnWebhook(payload: unknown) { return this.payments.callback(payload); }
 
   async getDonations() {
     return this.prisma.donation.findMany({
@@ -345,22 +193,15 @@ export class OutreachService {
   }
 
   async createApplication(data: any) {
-    const documentUrls: string[] = [];
-    if (data.documents && Array.isArray(data.documents)) {
-      for (const docBase64 of data.documents) {
-        const url = await this.uploadToSupabase(docBase64, 'application-doc');
-        if (url) documentUrls.push(url);
-      }
-    }
-
-    const { documents, ...cleanData } = data;
-
-    return this.prisma.outreachApplication.create({
-      data: {
-        ...cleanData,
-        documents: documentUrls
-      }
+    if (!['VOLUNTEER', 'SCHOLARSHIP', 'FAMILY_IN_NEED'].includes(data.type) || typeof data.applicantName !== 'string' || !data.applicantName.trim() || data.applicantName.length > 200 || typeof data.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || (data.documents && (!Array.isArray(data.documents) || data.documents.length > 5))) throw new BadRequestException('Invalid application details');
+    const prepared: Array<Awaited<ReturnType<SecureFilesService['prepareBase64']>>> = [];
+    for (const value of data.documents || []) prepared.push(await this.files.prepareBase64(value, 'donation'));
+    const application = await this.prisma.$transaction(async tx => {
+      const created = await tx.outreachApplication.create({ data: { type: data.type, applicantName: data.applicantName.trim(), email: data.email.trim().toLowerCase(), phone: typeof data.phone === 'string' ? data.phone.slice(0, 40) : null, eventId: typeof data.eventId === 'string' ? data.eventId : null, details: data.details && typeof data.details === 'object' && !Array.isArray(data.details) ? data.details : {}, status: 'PENDING', documents: prepared.map(file => '/api/v1/files/private/' + file.id) } });
+      for (const file of prepared) await tx.secureFile.create({ data: { ...file, parentId: created.id, expiresAt: null } });
+      return created;
     });
+    return { id: application.id, status: application.status };
   }
 
   async getApplications() {
@@ -369,50 +210,15 @@ export class OutreachService {
     });
   }
 
-  async sendNewsletter(data: { subject: string; body: string; audience: string }) {
-    // 1. Fetch audience emails based on type
-    const emails = new Set<string>();
-
-    if (data.audience === 'ALL' || data.audience === 'SUBSCRIBERS') {
-      const subs = await this.prisma.newsletterSubscriber.findMany({ select: { email: true } });
-      subs.forEach(s => emails.add(s.email));
-    }
-    
-    if (data.audience === 'ALL' || data.audience === 'DONATORS') {
-      const dons = await this.prisma.donation.findMany({ select: { email: true } });
-      dons.forEach(d => emails.add(d.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'VOLUNTEERS') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'VOLUNTEER' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'SCHOLARSHIPS') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'SCHOLARSHIP' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    if (data.audience === 'ALL' || data.audience === 'FAMILIES') {
-      const apps = await this.prisma.outreachApplication.findMany({ where: { type: 'FAMILY_IN_NEED' }, select: { email: true } });
-      apps.forEach(a => emails.add(a.email));
-    }
-
-    // SIMULATED SENDING LOGIC (Using external mail service)
-    console.log(`[NEWSLETTER] Sending email to ${emails.size} recipients in audience ${data.audience}`);
-    console.log(`[NEWSLETTER] Subject: ${data.subject}`);
-    
-    return {
-      success: true,
-      recipientsCount: emails.size,
-      message: `Successfully dispatched to ${emails.size} recipients.`
-    };
+  async sendNewsletter(_data: { subject: string; body: string; audience: string }) {
+    throw new ServiceUnavailableException('Newsletter delivery is not configured. No messages have been sent.');
   }
 
   // --- Outreach Events (Scholarships, etc) ---
   
-  async getEvents() {
+  async getEvents(internal = false) {
     return this.prisma.outreachEvent.findMany({
+      where: internal ? {} : { status: { in: ['OPEN', 'SCHEDULED'] } },
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
@@ -482,19 +288,20 @@ export class OutreachService {
     });
   }
 
-  async updateEventStatus(id: string, status: any) {
+  async updateEventStatus(id: string, status: any, openDate?: string) {
+    if (!['OPEN', 'DRAFT', 'SCHEDULED', 'CLOSED', 'COMPLETED'].includes(status) || (openDate && !Number.isFinite(Date.parse(openDate)))) throw new BadRequestException('Invalid event status or publication date');
     const validStatus = this.mapEventStatus(status);
     return this.prisma.outreachEvent.update({
       where: { id },
-      data: { status: validStatus }
+      data: { status: validStatus, ...(openDate ? { openDate: new Date(openDate) } : {}) }
     });
   }
 
   // --- Blog Posts ---
 
-  async getPosts(status?: string) {
+  async getPosts(status?: string, internal = false) {
     return this.prisma.blogPost.findMany({
-      where: status ? { status } : undefined,
+      where: internal ? (status ? { status } : {}) : { status: 'PUBLISHED' },
       orderBy: { createdAt: 'desc' },
     });
   }

@@ -1,14 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtUser } from '../../common/current-user.decorator';
+import { STAFF_DIRECTORY_SELECT, StaffDirectoryResponseDto } from '../../common/staff-response.dto';
 
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
 
+  auditLogs() {
+    return this.prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' }, take: 500,
+      select: { id: true, action: true, entity: true, entityId: true, createdAt: true,
+        actor: { select: { fullName: true, role: { select: { name: true } } } } },
+    });
+  }
+
   async getOverview(user: JwtUser) {
-    const isCeo = user.role === 'CEO';
-    const isManager = isCeo || user.role === 'MANAGER' || user.role === 'OUTREACH_MANAGER';
+    if (!['CEO', 'MANAGER'].includes(user.role)) throw new ForbiddenException('HR administration permission required');
     const [totalStaff, activeStaff, leaveRequests, pendingKyc, recentStaff] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { status: 'ACTIVE' } }),
@@ -17,7 +25,7 @@ export class AdminService {
       this.prisma.user.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
-        include: { role: true, department: true }
+        select: STAFF_DIRECTORY_SELECT
       })
     ]);
 
@@ -25,16 +33,16 @@ export class AdminService {
 
     return {
       totalStaff: activeStaff || totalStaff,
-      presentToday: activeStaff - onLeave,
+      presentToday: null,
       onLeave,
       leaveRequests,
-      onboardingCompletion: '94.2%',
-      employeeRetention: '96.8%',
-      performanceReviewCompletion: '92.0%',
-      trainingCompletion: '88.5%',
-      employeeSatisfaction: '4.8 / 5.0',
+      onboardingCompletion: null,
+      employeeRetention: null,
+      performanceReviewCompletion: null,
+      trainingCompletion: null,
+      employeeSatisfaction: null,
       leaveUtilization: `${Math.round((onLeave / (activeStaff || 1)) * 100)}%`,
-      recentStaff,
+      recentStaff: recentStaff.map(staff => new StaffDirectoryResponseDto(staff)),
       pendingKyc
     };
   }

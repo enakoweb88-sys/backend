@@ -1,10 +1,12 @@
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('self')
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
 
@@ -14,6 +16,7 @@ export class DashboardController {
   }
 
   @Get('overview')
+  @RequirePermission('analytics.read')
   overview(@CurrentUser() user: JwtUser) {
     return this.dashboard.getOverview(user);
   }
@@ -24,11 +27,13 @@ export class DashboardController {
   }
 
   @Get('charts/transactions')
+  @RequirePermission('finance.read')
   transactionChart() {
     return this.dashboard.getTransactionChart();
   }
 
   @Get('charts/employees')
+  @RequirePermission('hr.manage')
   employeeBreakdown() {
     return this.dashboard.getEmployeeBreakdown();
   }

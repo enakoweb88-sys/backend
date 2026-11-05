@@ -12,6 +12,7 @@ import {
   IsString,
   Min,
   MinLength,
+  MaxLength,
 } from 'class-validator';
 import { RoleName, MealStatus, KycStatus, TaskPriority, TaskStatus, GoalScope } from '@prisma/client';
 
@@ -285,6 +286,11 @@ export class CreateTransactionDto {
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
 export class CreateExpenseDto {
+  @IsOptional() @IsString() @MaxLength(200) department?: string;
+  @IsOptional() @IsDateString() expenseDate?: string;
+  @IsOptional() @IsString() @MaxLength(100) paymentMethod?: string;
+  @IsOptional() @IsString() @MaxLength(200) receiptRef?: string;
+  @IsOptional() @IsString() @MaxLength(4000) notes?: string;
   @IsString()
   description!: string;
 
@@ -636,6 +642,9 @@ export class CreatePerformanceMetricDto {
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
 export class CreateSubscriptionDto {
+  @IsOptional() @IsString() @MaxLength(200) department?: string;
+  @IsOptional() @IsString() @MaxLength(100) seats?: string;
+  @IsOptional() @IsString() @MaxLength(4000) notes?: string;
   @IsString()
   name!: string;
 

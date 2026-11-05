@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { MealStatus, Prisma, RoleName } from '@prisma/client';
 import { JwtUser } from '../../common/current-user.decorator';
 import { MealDto } from '../../common/dtos';
@@ -9,7 +9,7 @@ export class MealsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(user: JwtUser) {
-    const where = user.role === RoleName.EMPLOYEE ? { employeeId: user.sub } : {};
+    const where = ['CEO', 'MANAGER'].includes(user.role) ? {} : { employeeId: user.sub };
     const items = await this.prisma.mealRecord.findMany({
       where,
       include: { employee: { select: { fullName: true, email: true } } },
@@ -88,10 +88,11 @@ export class MealsService {
     return this.prisma.mealRecord.delete({ where: { id } });
   }
 
-  dispute(id: string, reason: string) {
-    return this.prisma.mealRecord.update({
-      where: { id },
-      data: { status: MealStatus.DISPUTED, disputeReason: reason },
-    });
+  async dispute(id: string, reason: string, user: JwtUser) {
+    if (!reason?.trim() || reason.length > 2000) throw new BadRequestException('A dispute reason of at most 2000 characters is required');
+    const where = { id, ...(['CEO', 'MANAGER'].includes(user.role) ? {} : { employeeId: user.sub }) };
+    const result = await this.prisma.mealRecord.updateMany({ where, data: { status: MealStatus.DISPUTED, disputeReason: reason.trim() } });
+    if (result.count !== 1) throw new NotFoundException('Meal record not found');
+    return this.prisma.mealRecord.findFirst({ where });
   }
 }

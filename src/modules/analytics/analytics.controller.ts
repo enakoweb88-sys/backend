@@ -1,10 +1,12 @@
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { CurrentUser, JwtUser } from '../../common/current-user.decorator';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { AnalyticsService } from './analytics.service';
 
 @Controller('analytics')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('analytics.read')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 

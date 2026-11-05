@@ -30,20 +30,18 @@ export class MailService {
     if (apiKey) {
       this.resend = new Resend(apiKey);
       this.apiKeyConfigured = true;
-      this.logger.log(
-        `Resend transactional mail service initialized with verified domain: ${VERIFIED_EMAIL_DOMAIN}`,
-      );
+      this.logger.log('Email operation: see authenticated delivery audit for status');
     } else {
       this.logger.log('RESEND_API_KEY is not set. SMTP delivery channel active.');
     }
 
     const smtpHost = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST || 'smtp.gmail.com';
     const smtpPort = parseInt(this.config.get<string>('SMTP_PORT') || process.env.SMTP_PORT || '465', 10);
-    const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
-    const smtpPass = this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev';
+    const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || '';
+    const smtpPass = this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || '';
 
     try {
-      this.transporter = nodemailer.createTransport({
+      if (smtpUser && smtpPass) this.transporter = nodemailer.createTransport({
         host: smtpHost,
         port: smtpPort,
         secure: smtpPort === 465,
@@ -51,9 +49,9 @@ export class MailService {
         tls: { rejectUnauthorized: false },
         family: 4, // Critical for cloud platforms (Render): prevents ENETUNREACH on IPv6
       } as any);
-      this.logger.log(`Nodemailer SMTP mail transporter initialized (${smtpUser} via ${smtpHost}:${smtpPort}, IPv4)`);
+      this.logger.log('Email operation: see authenticated delivery audit for status');
     } catch (e: any) {
-      this.logger.warn(`Could not initialize nodemailer transporter: ${e?.message}`);
+      this.logger.warn('Email operation: see authenticated delivery audit for status');
     }
   }
 
@@ -68,7 +66,7 @@ export class MailService {
       .filter((r): r is string => Boolean(r && r.includes('@')));
 
     if (cleanRecipients.length === 0) {
-      this.logger.warn(`Email sending aborted: No valid recipient email provided for subject "${options.subject}"`);
+      this.logger.warn('Email operation: see authenticated delivery audit for status');
       return { success: false, error: 'No valid recipient email address' };
     }
 
@@ -96,7 +94,7 @@ export class MailService {
     }
 
     const recipientLogStr = cleanRecipients.join(', ');
-    this.logger.log(`Attempting email dispatch -> To: [${recipientLogStr}] | Subject: "${options.subject}" | From: ${fromAddress}`);
+    this.logger.log('Email operation: see authenticated delivery audit for status');
 
     let lastError: string | undefined;
 
@@ -116,9 +114,7 @@ export class MailService {
 
         if (!error && data?.id) {
           const messageId = data.id;
-          this.logger.log(
-            `Email successfully dispatched via Resend -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
-          );
+          this.logger.log('Email operation: see authenticated delivery audit for status');
 
           await this.logEmailAudit({
             recipients: cleanRecipients,
@@ -132,68 +128,26 @@ export class MailService {
 
           return { success: true, messageId };
         } else if (error) {
-          this.logger.warn(
-            `Resend delivery notice for [${recipientLogStr}]: ${error.message}. Proceeding to SMTP channel...`,
-          );
-          lastError = error.message;
+          this.logger.warn('Email operation: see authenticated delivery audit for status');
+          lastError = 'Email provider rejected delivery';
         }
       } catch (err: any) {
-        this.logger.warn(
-          `Resend exception for [${recipientLogStr}]: ${err?.message || err}. Proceeding to SMTP channel...`,
-        );
-        lastError = err?.message;
+        this.logger.warn('Email operation: see authenticated delivery audit for status');
+        lastError = 'Email provider unavailable';
       }
     }
 
     // 2. Dispatch via Nodemailer SMTP (Live guaranteed delivery)
     if (this.transporter) {
-      const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || 'enakosupport@gmail.com';
+      const smtpUser = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER || '';
       const displayNameMatch = fromAddress.match(/"([^"]+)"/);
       const displayName = displayNameMatch ? displayNameMatch[1] : 'ENAKO Compliance';
       const smtpSender = `"${displayName}" <${smtpUser}>`;
 
       try {
-        let info;
-        try {
-          info = await this.transporter.sendMail({
-            from: smtpSender,
-            to: cleanRecipients,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.subject,
-            replyTo: replyToAddress || 'support@enakoos.com',
-            attachments: options.attachments,
-          });
-        } catch (firstErr: any) {
-          this.logger.warn(`Primary SMTP attempt failed (${firstErr?.message}). Retrying via secure port 465 SSL IPv4...`);
-          const sslTransporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            family: 4,
-            auth: {
-              user: smtpUser,
-              pass: this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS || 'drsg gmlk hqfz kwev',
-            },
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 12000,
-          } as any);
-          info = await sslTransporter.sendMail({
-            from: smtpSender,
-            to: cleanRecipients,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.subject,
-            replyTo: replyToAddress || 'support@enakoos.com',
-            attachments: options.attachments,
-          });
-        }
-
+        const info = await this.transporter.sendMail({ from: smtpSender, to: cleanRecipients, subject: options.subject, html: options.html, text: options.text || options.subject, replyTo: replyToAddress || DEFAULT_REPLY_TO, attachments: options.attachments });
         const messageId = info.messageId || `smtp_${Date.now()}`;
-        this.logger.log(
-          `Email successfully dispatched via SMTP -> To: [${recipientLogStr}] (MessageId: ${messageId})`,
-        );
+        this.logger.log('Email operation: see authenticated delivery audit for status');
 
         await this.logEmailAudit({
           recipients: cleanRecipients,
@@ -207,10 +161,8 @@ export class MailService {
 
         return { success: true, messageId };
       } catch (smtpErr: any) {
-        this.logger.error(
-          `SMTP dispatch failed for [${recipientLogStr}]: ${smtpErr?.message || smtpErr}`,
-        );
-        lastError = smtpErr?.message;
+        this.logger.error('Email operation: see authenticated delivery audit for status');
+        lastError = 'Email provider unavailable';
       }
     }
 
@@ -411,7 +363,7 @@ export class MailService {
     fullName: string;
     department: string;
     position: string;
-    password: string;
+    password?: string;
     loginEmail: string;
     responsibilities?: string;
     goals?: string;
@@ -518,7 +470,6 @@ export class MailService {
       keyDetails: [
         { label: 'Login Portal', value: '<a href="https://enakoos.com" style="color: #00adb2; font-weight: 700; text-decoration: none;">https://enakoos.com</a>' },
         { label: 'Corporate Email', value: loginEmail, isHighlight: true },
-        { label: 'Initial Password', value: `<span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0f172a; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">${password}</span>` },
         { label: 'Position & Dept', value: `${position} (${department})` },
       ],
       calloutNote: {
@@ -1008,7 +959,7 @@ export class MailService {
       });
     } catch (err: any) {
       // Never let audit log failure crash the email service
-      this.logger.debug(`Could not write email audit log: ${err?.message}`);
+      this.logger.debug('Email operation: see authenticated delivery audit for status');
     }
   }
 }

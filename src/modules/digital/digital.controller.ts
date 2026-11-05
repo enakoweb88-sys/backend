@@ -1,11 +1,18 @@
+import { PermissionsGuard, RequirePermission } from '../../common/permissions';
 import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { DigitalService } from './digital.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('digital')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermission('digital.manage')
 export class DigitalController {
   constructor(private readonly digitalService: DigitalService) {}
+  @Post('assistant')
+  @RequirePermission('self')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  assistant(@Body() data: { prompt: string }) { return this.digitalService.assistant(data.prompt); }
 
   @Get('posts')
   getPosts() { return this.digitalService.getPosts(); }

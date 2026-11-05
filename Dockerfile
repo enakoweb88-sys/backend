@@ -1,40 +1,23 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
-
 RUN apk add --no-cache openssl
-
 COPY package*.json ./
-RUN npm install
-
-COPY . .
-
-# Create a temporary .env for build time (Prisma generation only)
-RUN echo "DATABASE_URL=postgresql://user:password@localhost:5432/db" > .env && \
-    echo "DIRECT_URL=postgresql://user:password@localhost:5432/db" >> .env && \
-    npx prisma generate && \
-    rm .env
-
-RUN npm run build
-
-RUN ls -la /app/dist && echo "BUILD SUCCESS" || (echo "BUILD FAILED - dist is empty" && exit 1)
-
-FROM node:20-alpine
-WORKDIR /app
-
-RUN apk add --no-cache openssl
-
-COPY package*.json ./
-RUN npm install --omit=dev
-
+RUN npm ci --ignore-scripts
 COPY prisma ./prisma
 RUN npx prisma generate
+COPY tsconfig*.json nest-cli.json ./
+COPY src ./src
+RUN npx nest build
+RUN npm prune --omit=dev --ignore-scripts
 
-COPY --from=builder /app/dist ./dist
-
-RUN ls -la /app/dist && echo "COPY SUCCESS" || (echo "COPY FAILED - dist missing in final stage" && exit 1)
-
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
-EXPOSE 3000
-CMD ["/app/start.sh"]
+FROM node:22-alpine
+ENV NODE_ENV=production
+ENV PORT=5000
+WORKDIR /app
+RUN apk add --no-cache openssl
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --chown=node:node package.json start.sh ./
+USER node
+EXPOSE 5000
+CMD ["sh", "./start.sh"]

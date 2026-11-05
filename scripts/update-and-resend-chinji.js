@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 
-const connectionString = "postgresql://postgres.ltdodqloxdpnsvthkowl:enakoos2026@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?connect_timeout=30";
+const connectionString = require('./maintenance-config.cjs').databaseUrl();
 const prisma = new PrismaClient({ datasources: { db: { url: connectionString } } });
 
 async function run() {
@@ -18,7 +18,7 @@ async function run() {
 
   // 2. Setup email transport
   const user = 'enakosupport@gmail.com';
-  const pass = 'drsg gmlk hqfz kwev';
+  const pass = process.env.SMTP_PASS;
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',

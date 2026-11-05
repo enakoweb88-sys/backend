@@ -29,11 +29,7 @@ test('private conversations are stable pairs and membership cannot be expanded',
 
 test('management directory cannot list unrelated private conversations', async () => {
   const records = [{ name: 'general', members: [] }, { name: 'dm:own', members: [{ userId: 'ceo' }] }, { name: 'dm:others', members: [{ userId: 'someone' }] }];
-  const prisma = { user: { findUnique: async () => ({ role: { name: 'CEO' } }) }, channel: { findMany: async ({ where }) => {
-    assert.ok(where.OR.some(rule => rule.members?.some.userId === 'ceo'));
-    assert.ok(where.OR.some(rule => rule.NOT?.name.startsWith === 'dm:'));
-    return records.filter(record => !record.name.startsWith('dm:') || record.members.some(member => member.userId === 'ceo'));
-  } } };
+  const prisma = { user: { findUnique: async () => ({ status: 'ACTIVE', role: { name: 'CEO' } }) }, channel: { findMany: async () => records, findUnique: async ({ where, include }) => { const row = records.find(r => r.name === where.name); return row ? { ...row, isGeneral: row.name === 'general', members: row.members.filter(m => m.userId === include.members.where.userId) } : null; } } };
   assert.deepEqual((await new CommunicationsService(prisma).getAvailableChannels('ceo')).map(item => item.name), ['general', 'dm:own']);
 });
 
@@ -58,8 +54,8 @@ test('private REST replies notify only the other participant and never broadcast
 test('unauthenticated websocket clients cannot join or write private conversations', async () => {
   const joins = [], writes = [];
   const gateway = new CommunicationsGateway({ message: { create: async data => writes.push(data) } });
-  const socket = { join: value => joins.push(value), emit: () => {} };
-  assert.ok(gateway.handleJoin('dm:pair', socket).error);
+  const socket = { data: {}, rooms: new Set(), join: value => joins.push(value), emit: () => {}, disconnect: () => {} };
+  assert.ok((await gateway.handleJoin('dm:pair', socket)).error);
   assert.ok((await gateway.handleMessage({ channel: 'dm:pair', senderId: 'ceo', content: 'Forged' }, socket)).error);
   assert.equal(joins.length, 0); assert.equal(writes.length, 0);
 });

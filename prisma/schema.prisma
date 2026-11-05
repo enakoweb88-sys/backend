@@ -93,6 +93,10 @@ model User {
   @@index([roleId])
   @@index([status])
   @@map("users")
+  authSessions AuthSession[]
+
+  supportTickets SupportTicket[]
+
 }
 
 model UserPreference {
@@ -158,6 +162,12 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+  authSessionId String?
+  authSession AuthSession? @relation(fields: [authSessionId], references: [id], onDelete: Cascade)
+  usedAt DateTime?
+  replacedById String?
+  @@index([authSessionId])
+
 }
 
 model Task {
@@ -197,6 +207,11 @@ model TaskComment {
 }
 
 model Expense {
+  department String?
+  expenseDate DateTime?
+  paymentMethod String?
+  receiptRef String?
+  notes String?
   id            String        @id @default(cuid())
   description   String
   amount        Decimal       @db.Decimal(14, 2)
@@ -237,6 +252,10 @@ model Transaction {
   @@index([status])
   @@index([createdAt])
   @@map("transactions")
+  idempotencyKey String? @unique
+  requestHash String?
+  ledgerAppliedAt DateTime?
+
 }
 
 model MealRecord {
@@ -734,6 +753,10 @@ model SupportTicket {
   replies     SupportTicketReply[]
 
   @@map("support_tickets")
+  ownerId String?
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  @@index([ownerId])
+
 }
 
 model SupportTicketReply {
@@ -761,6 +784,9 @@ model LeaveRequest {
 }
 
 model Subscription {
+  department String?
+  seats String?
+  notes String?
   id          String   @id @default(cuid())
   name        String
   cost        Decimal  @db.Decimal(14, 2)
@@ -908,7 +934,7 @@ model PublicImpactChart {
 
 model Donation {
   id        String            @id @default(cuid())
-  amount    Float
+  amount Decimal @db.Decimal(14, 2)
   sector    String
   frequency DonationFrequency
   method    PaymentMethod
@@ -920,6 +946,13 @@ model Donation {
   updatedAt DateTime          @updatedAt
   documents String[]
   currency  String            @default("XAF")
+  idempotencyKey String? @unique
+  requestHash String?
+  providerReference String? @unique
+  statusLookupHash String?
+  providerCheckedAt DateTime?
+  providerTransactionId String? @unique
+
 }
 
 model FloatAccount {
@@ -1142,7 +1175,8 @@ enum CashCollectionStatus {
 
 model CashCollection {
   id                 String               @id @default(cuid())
-  collectorId        String
+  collectorId        String? // Preserved legacy reference; never used to grant Cash access.
+  cashUserId         String?
   clientName         String
   location           String
   amountCollected    Decimal              @db.Decimal(14, 2)
@@ -1154,8 +1188,10 @@ model CashCollection {
   receiptUrl         String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
-  collector          User                 @relation(fields: [collectorId], references: [id])
+  legacyCollector    User?                @relation(fields: [collectorId], references: [id])
+  collector          CashUser?            @relation(fields: [cashUserId], references: [id], onDelete: Restrict)
 
+  @@index([cashUserId])
   @@index([collectorId])
   @@index([status])
   @@index([collectionTime])
@@ -1200,4 +1236,178 @@ model MarketerTerritory {
 
   @@index([marketerId])
   @@map("marketer_territories")
+}
+
+model AuthSession {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device String?
+  ipAddress String?
+  roleAtIssue RoleName
+  passwordVersion DateTime?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  refreshTokens RefreshToken[]
+  @@index([userId, revokedAt])
+  @@map("auth_sessions")
+}
+
+model RateLimitBucket {
+  key String @id
+  hits Int
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
+model SecureFile {
+  id String @id @default(uuid())
+  ownerId String?
+  scope String
+  parentId String?
+  fileName String
+  mimeType String
+  size Int
+  sha256 String
+  data Bytes @db.ByteA
+  scanStatus String @default("PENDING")
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  @@index([ownerId, scope])
+  @@index([scope, parentId])
+  @@index([expiresAt])
+  @@map("secure_files")
+}
+
+// Cash identities and sessions are independent of company users and roles.
+model CashUser {
+  id String @id @default(uuid())
+  email String @unique
+  fullName String
+  phone String?
+  passwordHash String
+  passwordChangedAt DateTime @default(now())
+  status String @default("ACTIVE")
+  branch String @default("")
+  terminalId String @unique
+  jobLabel String @default("Cash Collector")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  collections CashCollection[]
+  sessions CashSession[]
+  @@map("cash_users")
+}
+model CashSession {
+  id String @id @default(uuid())
+  cashUserId String
+  user CashUser @relation(fields: [cashUserId], references: [id], onDelete: Restrict)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([cashUserId, revokedAt])
+  @@map("cash_sessions")
+}
+model CashAuditLog {
+  id String @id @default(uuid())
+  actorId String?
+  action String
+  entity String
+  entityId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@map("cash_audit_logs")
+}
+
+model CashTransaction {
+  id           String            @id @default(cuid())
+  reference    String            @unique
+  entity       String
+  amount       Decimal           @db.Decimal(14, 2)
+  currency     String            @default("XAF")
+  amountInXaf  Decimal?          @db.Decimal(14, 2)
+  exchangeRate Decimal?          @db.Decimal(14, 4)
+  type         String
+  status       TransactionStatus @default(PENDING)
+  proofUrl     String?
+  settledAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  description  String?
+  channel      String?
+  charges      Decimal?          @default(0) @db.Decimal(14, 2)
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("cash_transactions")
+  idempotencyKey String? @unique
+  requestHash String?
+  ledgerAppliedAt DateTime?
+
+}
+
+model CashFloatAccount {
+  id        String   @id @default(cuid())
+  channel   String   @unique
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  totalIn   Decimal  @default(0) @db.Decimal(14, 2)
+  totalOut  Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cash_float_accounts")
+}
+
+model CashExchangeRate {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  flag        String   @default("")
+  buyingRate  String   @default("")
+  sellingRate String   @default("")
+  change24h   Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cash_exchange_rates")
+}
+
+model CashDocument {
+  id String @id @default(uuid())
+  ownerId String?
+  scope String
+  parentId String?
+  fileName String
+  mimeType String
+  size Int
+  sha256 String
+  data Bytes @db.ByteA
+  scanStatus String @default("PENDING")
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  @@index([ownerId, scope])
+  @@index([scope, parentId])
+  @@index([expiresAt])
+  @@map("cash_documents")
+}
+
+model CashKycSubmission {
+  id String @id @default(uuid())
+  applicantType String
+  applicantName String
+  email String?
+  phone String?
+  payload Json
+  documents Json
+  status String @default("PENDING")
+  rejectionReason String?
+  reviewedById String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status])
+  @@map("cash_kyc_submissions")
 }

@@ -21,13 +21,12 @@ export class SupportController {
       email: user.email,
       subject: body.subject,
       description: body.description
-    });
+    }, user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('tickets/:id/reply')
   async reply(@Param('id') id: string, @Body('message') message: string, @CurrentUser() user: JwtUser) {
-    const isAdmin = user.role === 'CEO' || user.role === 'MANAGER' || user.role === 'SUPPORT';
-    return this.supportService.addReply(id, message, isAdmin);
+    return this.supportService.addReply(id, message, user);
   }
 }

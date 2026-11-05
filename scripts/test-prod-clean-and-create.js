@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { PrismaClient } = require('@prisma/client');
 
-const connectionString = "postgresql://postgres.ltdodqloxdpnsvthkowl:enakoos2026@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?connect_timeout=30";
+const connectionString = require('./maintenance-config.cjs').databaseUrl();
 const prisma = new PrismaClient({ datasources: { db: { url: connectionString } } });
 const PROD_API = 'https://api.enakoos.com/api/v1';
 

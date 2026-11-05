@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-05",
+  "repos": [
+    {
+      "repo": "backend",
+      "original": "b90985fe7443145499322805fcce89bf21d3d5e1",
+      "status": "M  package-lock.json\nM  package.json\n M src/modules/admin/admin.controller.ts\n M src/modules/admin/admin.service.ts\n M src/modules/auth/auth.service.ts\n M src/modules/auth/jwt.strategy.ts\n M src/modules/cash-collections/cash-collections.controller.ts\n M src/modules/cash-collections/cash-collections.module.ts\n M src/modules/cash-collections/cash-collections.service.ts\n M src/modules/employees/employees.controller.ts\n M src/modules/employees/employees.service.ts\n M src/modules/users/users.service.ts\n?? docs/security-remediation/batch-1.md\n?? docs/security-remediation/change-register.md\n?? docs/security-remediation/migration-and-rollback.md\n?? docs/security-remediation/zero-trust-setup.md\n?? scripts/register-typescript.cjs\n?? scripts/test-cash-security.cjs\n?? scripts/test-staff-redaction.cjs\n?? src/common/application-boundary.ts\n?? src/common/staff-response.dto.ts\n?? src/modules/cash-collections/cash-access.guard.ts\n?? src/modules/cash-collections/cash-access.ts\n?? src/modules/cash-collections/cash-auth.controller.ts\n?? src/modules/cash-collections/cash-auth.service.ts\n?? src/modules/cash-collections/cash-response.interceptor.ts\n?? src/modules/cash-collections/cash.dto.ts\n",
+      "stagedDigest": "f7779fa4bce8ce4d47c612cf916db5b39b77c5826e7e05bd6246e82bb9735756",
+      "ignored": [
+        ".env",
+        "dist/",
+        "node_modules/"
+      ]
+    },
+    {
+      "repo": "cash",
+      "original": "5cf0a1a7d419c8dbdff5e3251db12fe8ddd7821a",
+      "status": " M src/App.tsx\n M src/api/cashApi.ts\n M src/components/CollectorsView.tsx\n M src/components/DashboardView.tsx\n M src/components/LoginView.tsx\n M src/components/NewCollectionView.tsx\n M src/types.ts\n M src/utils/permissions.ts\n M test-fx-collectors.cjs\n?? docs/security-batch-1.md\n?? test-cash-auth.cjs\n",
+      "stagedDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored": [
+        ".env",
+        "assets/",
+        "assets/.aistudio/",
+        "assets/.aistudio/.gitignore",
+        "dev-server.error.log",
+        "dev-server.log",
+        "dist/",
+        "node_modules/"
+      ]
+    },
+    {
+      "repo": "enako-os",
+      "original": "74309d0a5f9590f2befccfb334722537ecfffcef",
+      "status": " M src/pages/StaffMeals.tsx\n",
+      "stagedDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored": [
+        ".env",
+        ".env.local",
+        "dist/",
+        "node_modules/"
+      ]
+    },
+    {
+      "repo": "client",
+      "original": "d9285141e7023ab62360ad535a9974e60ae7f694",
+      "status": "",
+      "stagedDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored": [
+        ".kilocode/",
+        ".kilocode/.gitignore",
+        ".kilocode/node_modules/",
+        ".kilocode/package-lock.json",
+        ".kilocode/package.json",
+        "dist/",
+        "node_modules/"
+      ]
+    },
+    {
+      "repo": "testing",
+      "original": "ee91db7b72a84c4687de109eb16d20b531ba83a3",
+      "status": "",
+      "stagedDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ignored": [
+        "dist/",
+        "node_modules/"
+      ]
+    }
+  ]
+}

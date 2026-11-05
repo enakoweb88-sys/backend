@@ -27,3 +27,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+.cache/
+.test-runtime/
+coverage/

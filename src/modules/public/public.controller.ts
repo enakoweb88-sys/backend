@@ -1,6 +1,8 @@
+import { PublicApi } from '../../common/gateway-access';
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { PublicService } from './public.service';
 
+@PublicApi()
 @Controller('public')
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}

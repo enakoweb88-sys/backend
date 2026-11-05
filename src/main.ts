@@ -5,34 +5,35 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { join } from 'path';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
 import { PrismaService } from './modules/prisma/prisma.service';
-import { ensureRuntimeSchema } from './modules/prisma/runtime-schema';
+import { corsAllowlist, trustedProxies } from './common/request-security';
+import { SafeExceptionFilter } from './common/safe-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
-  // Prepare the shipped schema before Nest runs report-storage security hooks.
-  // This also covers Docker, npm start and direct node dist/main.js launches.
-  await ensureRuntimeSchema(app.get(PrismaService));
-  console.log('Database schema upgrades verified; starting API.');
-  const corsOrigins = config.get<string>('CORS_ORIGIN')?.split(',') ?? [];
+  // Schema changes belong to a separately approved migration job, never runtime startup.
+  const corsOrigins = corsAllowlist(config);
+  app.set('trust proxy', trustedProxies(config));
 
   app.setGlobalPrefix('api/v1');
+  app.useGlobalFilters(new SafeExceptionFilter());
+  app.use((_request: Request, response: Response, next: NextFunction) => { response.setHeader('Cache-Control', 'private, no-store'); next(); });
 
   // Increase body size limit to 50mb to prevent "Request entity too large" error when uploading blog posts & cover photos
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ limit: '128kb', extended: false }));
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cookieParser());
 
   app.enableCors({
-    origin: true, // Allow all origins for seamless cross-domain outreach API access
-    credentials: true,
+    origin: corsOrigins,
+    credentials: false,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'Cf-Access-Jwt-Assertion', 'X-Payment-Status-Token'],
   });
 
   app.useGlobalPipes(
@@ -43,11 +44,6 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-
-  // Serve uploaded files as static assets
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads',
-  });
 
   const port = config.get<number>('PORT') ?? 5000;
   await app.listen(port);

@@ -1,3 +1,7 @@
+import { PublicApi } from '../../common/gateway-access';
+import { Throttle } from '@nestjs/throttler';
+import { SecureFilesService, uploadLimits } from '../files/secure-files.service';
+import { BadRequestException } from '@nestjs/common';
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors, UploadedFiles, HttpException, NotFoundException, ServiceUnavailableException, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
@@ -16,7 +20,7 @@ import { KycService } from './kyc.service';
 
 @Controller('kyc')
 export class KycController {
-  constructor(private readonly kyc: KycService, private config: ConfigService) {}
+  constructor(private readonly kyc: KycService, private config: ConfigService, private readonly privateFiles: SecureFilesService) {}
 
   @Get('submissions/:submissionId/documents/:documentId/file')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,6 +33,10 @@ export class KycController {
     const document = await this.kyc.findDocument(submissionId, documentId);
     if (!document?.fileUrl) throw new NotFoundException('This document has no stored file. Please request a new upload.');
 
+    if (document.fileUrl.startsWith('/api/v1/files/private/')) {
+      const file = await this.privateFiles.read(document.fileUrl.split('/').pop()!, { sub: '', role: 'MANAGER' });
+      this.privateFiles.respond(response, file); return;
+    }
     let bytes: Buffer;
     let mimeType = 'application/octet-stream';
     if (document.fileUrl.startsWith('/uploads/')) {
@@ -74,115 +82,22 @@ export class KycController {
   }
 
   @Post('submissions')
-  @UseInterceptors(AnyFilesInterceptor({
-    storage: memoryStorage(),
-  }))
+  @PublicApi()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseInterceptors(AnyFilesInterceptor({ storage: memoryStorage(), limits: uploadLimits }))
   async submit(@Body() body: any, @UploadedFiles() files?: Express.Multer.File[]) {
-    try {
-      let payload: Record<string, unknown> = {};
-      try {
-        payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : (body.payload ?? {});
-      } catch {
-        payload = body;
-      }
-
-      const documents: Array<{ documentType: string; fileName: string; fileUrl: string; mimeType?: string }> = [];
-
-      if (files?.length) {
-        const supabaseUrl = this.config.get<string>('SUPABASE_URL');
-        const supabaseKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY') || this.config.get<string>('SUPABASE_ANON_KEY');
-        
-        let supabase = null;
-        if (supabaseUrl && supabaseKey) {
-          try {
-            if (!globalThis.WebSocket) {
-              (globalThis as any).WebSocket = WebSocket;
-            }
-            supabase = createClient(supabaseUrl, supabaseKey, {
-              auth: { persistSession: false }
-            });
-          } catch (err: any) {
-            console.error('Supabase Client Error:', err);
-            throw new Error(`Supabase Configuration Error: ${err.message}`);
-          }
-          // Ensure bucket exists (idempotent — ignores if already created)
-          try {
-            await supabase.storage.createBucket('kyc-documents', { public: true });
-          } catch {
-            // bucket likely already exists — safe to ignore
-          }
-        }
-
-        for (const file of files) {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const fileName = `${uniqueSuffix}${extname(file.originalname)}`;
-          let fileUrl = '';
-
-          if (supabase) {
-            const { data, error } = await supabase.storage
-              .from('kyc-documents')
-              .upload(fileName, file.buffer, {
-                contentType: file.mimetype,
-              });
-              
-            if (!error && data) {
-               const { data: publicData } = supabase.storage.from('kyc-documents').getPublicUrl(fileName);
-               fileUrl = publicData.publicUrl;
-            } else {
-               console.error('Supabase upload error:', error);
-            }
-          }
-
-          if (!fileUrl) {
-            const uploadPath = join(process.cwd(), 'uploads');
-            try {
-              if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-              fs.writeFileSync(join(uploadPath, fileName), file.buffer);
-              fileUrl = `/uploads/${fileName}`;
-            } catch (err) {
-              console.error('Failed to write file locally:', err);
-              // Fallback to avoid crashing the submission
-              fileUrl = '';
-            }
-          }
-
-          documents.push({
-            documentType: file.fieldname,
-            fileName: file.originalname,
-            fileUrl,
-            mimeType: file.mimetype,
-          });
-        }
-      }
-
-      if (body.documentMeta) {
-        const metas = Array.isArray(body.documentMeta) ? body.documentMeta : [body.documentMeta];
-        metas.forEach((meta: string) => {
-          try {
-            const parsed = JSON.parse(meta);
-            if (!documents.find(d => d.documentType === parsed.documentType)) {
-              documents.push({ documentType: parsed.documentType, fileName: parsed.fileName, fileUrl: '' });
-            }
-          } catch {}
-        });
-      }
-
-      return await this.kyc.submit({
-        applicantType: body.applicantType ?? 'individual',
-        applicantName: body.applicantName ?? 'Unknown',
-        email: body.email || undefined,
-        phone: body.phone || undefined,
-        payload,
-        documents: documents.length ? documents : undefined,
-      });
-
-    } catch (error: any) {
-      console.error('KYC Submit Error:', error);
-      throw new HttpException(
-        `Database or Configuration Error: ${error?.message || 'Failed to submit KYC.'}`,
-        500
-      );
+    if (!['individual', 'business', 'company', 'corporate'].includes(body.applicantType) || typeof body.applicantName !== 'string' || !body.applicantName.trim() || body.applicantName.length > 200 || (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) || (body.phone && (typeof body.phone !== 'string' || body.phone.length > 40))) throw new BadRequestException('Invalid applicant details');
+    let payload: Record<string, unknown>;
+    try { payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : body.payload; } catch { throw new BadRequestException('Invalid application details'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || JSON.stringify(payload).length > 128 * 1024) throw new BadRequestException('Invalid application details');
+    if (!files?.length) throw new BadRequestException('Attach your verification documents');
+    const prepared = [];
+    for (const file of files) {
+      if (!/^[a-zA-Z0-9_-]{1,80}$/.test(file.fieldname)) throw new BadRequestException('Invalid document field');
+      prepared.push({ ...(await this.privateFiles.prepare(file, 'kyc', undefined, true)), documentType: file.fieldname });
     }
+    const submission = await this.kyc.submit({ applicantType: body.applicantType, applicantName: body.applicantName.trim(), email: body.email, phone: body.phone, payload }, prepared);
+    return { id: submission.id, status: submission.status, createdAt: submission.createdAt };
   }
 
   @Get('submissions')

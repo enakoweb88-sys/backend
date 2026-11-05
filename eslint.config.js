@@ -1,28 +1,3 @@
-export default [
-  {
-    ignores: ['dist', 'node_modules', 'build'],
-  },
-  {
-    files: ['src/**/*.ts'],
-    languageOptions: {
-      parser: '@typescript-eslint/parser',
-      parserOptions: {
-        ecmaVersion: 2020,
-        sourceType: 'module',
-      },
-      globals: {
-        node: true,
-        console: true,
-        process: true,
-      },
-    },
-    plugins: {
-      '@typescript-eslint': '@typescript-eslint/eslint-plugin',
-    },
-    rules: {
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/explicit-function-return-types': 'warn',
-      'no-console': ['warn', { allow: ['warn', 'error', 'log'] }],
-    },
-  },
-];
+const parser = require('@typescript-eslint/parser');
+const plugin = require('@typescript-eslint/eslint-plugin');
+module.exports = [{ ignores: ['dist/**', 'node_modules/**', '.cache/**', '.test-runtime/**'] }, { files: ['src/**/*.ts'], languageOptions: { parser, parserOptions: { ecmaVersion: 2022, sourceType: 'module' } }, plugins: { '@typescript-eslint': plugin }, rules: { 'no-eval': 'error', 'no-implied-eval': 'error', 'no-new-func': 'error', 'no-debugger': 'error', 'no-constant-condition': 'error', '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none' }] } }];

@@ -8,7 +8,7 @@ export class SubscriptionsService {
   constructor(private prisma: PrismaService) {}
 
   list(user: JwtUser) {
-    const isEmployee = user.role === 'EMPLOYEE';
+    const isEmployee = !['CEO', 'MANAGER'].includes(user.role);
     return this.prisma.subscription.findMany({
       where: isEmployee ? { addedById: user.sub } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -29,6 +29,7 @@ export class SubscriptionsService {
         startDate: new Date(dto.startDate),
         nextBilling: new Date(dto.nextBilling),
         receiptUrl: dto.receiptUrl,
+        department: dto.department, seats: dto.seats, notes: dto.notes,
         addedById: user.sub
       }
     });

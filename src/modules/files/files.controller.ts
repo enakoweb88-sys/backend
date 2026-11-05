@@ -1,3 +1,4 @@
+import { SecureFilesService, uploadLimits } from './secure-files.service';
 import {
   BadRequestException,
   Controller,
@@ -26,26 +27,13 @@ import { FilesService } from './files.service';
 @Controller('files')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class FilesController {
-  constructor(private readonly files: FilesService, private readonly config: ConfigService) {}
+  constructor(private readonly files: FilesService, private readonly privateFiles: SecureFilesService) {}
 
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-      fileFilter: (_req, file, cb) => {
-        const allowed = [
-          'image/jpeg', 'image/png', 'image/webp',
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
-        if (allowed.includes(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(new BadRequestException(`File type ${file.mimetype} is not allowed`), false);
-        }
-      },
+      limits: uploadLimits,
     }),
   )
   async upload(
@@ -55,61 +43,10 @@ export class FilesController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
 
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const fileName = `${uniqueSuffix}${extname(file.originalname)}`;
-    let fileUrl = '';
-
-    const supabaseUrl = this.config.get<string>('SUPABASE_URL');
-    const supabaseKey = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY') || this.config.get<string>('SUPABASE_ANON_KEY');
-    
-    let supabase = null;
-    if (supabaseUrl && supabaseKey) {
-      try {
-        if (!globalThis.WebSocket) {
-          (globalThis as any).WebSocket = WebSocket;
-        }
-        supabase = createClient(supabaseUrl, supabaseKey, {
-          auth: { persistSession: false }
-        });
-      } catch (err: any) {
-        console.error('Supabase Client Error:', err);
-      }
-      
-      try {
-        await supabase?.storage.createBucket('general-documents', { public: true });
-      } catch {
-        // bucket likely already exists
-      }
-    }
-
-    if (supabase) {
-      const { data, error } = await supabase.storage
-        .from('general-documents')
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-        });
-        
-      if (!error && data) {
-         const { data: publicData } = supabase.storage.from('general-documents').getPublicUrl(fileName);
-         fileUrl = publicData.publicUrl;
-      } else {
-         console.error('Supabase upload error:', error);
-      }
-    }
-
-    if (!fileUrl) {
-      const uploadPath = join(process.cwd(), 'uploads');
-      try {
-        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-        fs.writeFileSync(join(uploadPath, fileName), file.buffer);
-        fileUrl = `/uploads/${fileName}`;
-      } catch (err) {
-        console.error('Failed to write file locally:', err);
-        throw new BadRequestException('Failed to process file upload');
-      }
-    }
-
-    return this.files.saveDocument(file, user, fileUrl, fileName, category);
+    const saved = await this.privateFiles.save(file, 'general', user.sub);
+    const document = await this.files.saveDocument({ ...file, mimetype: saved.mimeType }, user, saved.url, saved.fileName, category);
+    await this.privateFiles.attach(saved.id, document.id);
+    return document;
   }
 
   @Get()

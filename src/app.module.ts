@@ -1,4 +1,10 @@
+import { APP_GUARD } from '@nestjs/core';
+import { GatewayAccessGuard } from './common/gateway-access';
+import { PrismaService } from './modules/prisma/prisma.service';
+import { PostgresThrottlerStorage } from './common/postgres-throttler';
+import { HttpRateLimitGuard } from './common/http-rate-limit.guard';
 import { Module } from '@nestjs/common';
+import { PermissionsModule } from './common/permissions';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -37,15 +43,19 @@ import { SecurityModule } from './modules/security/security.module';
 import { MarketerModule } from './modules/marketer/marketer.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
+  providers: [{ provide: APP_GUARD, useClass: HttpRateLimitGuard }, { provide: APP_GUARD, useClass: GatewayAccessGuard }],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    PermissionsModule,
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ThrottlerModule.forRootAsync({ imports: [PrismaModule], inject: [PostgresThrottlerStorage], useFactory: (storage: PostgresThrottlerStorage) => ({ throttlers: [{ ttl: 60000, limit: 120 }], storage }) }),
     CacheModule.register({ isGlobal: true, ttl: 60000 }),
     // Core
     PrismaModule,
+    HealthModule,
     AuthModule,
     // User & Access Management
     UsersModule,

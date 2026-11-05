@@ -1,3 +1,4 @@
+import { DonationPaymentsService } from './donation-payments.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { OutreachController } from './outreach.controller';
@@ -8,7 +9,7 @@ import { PixiPayService } from './pixipay.service';
 @Module({
   imports: [PrismaModule],
   controllers: [OutreachController],
-  providers: [OutreachService, MtnService, PixiPayService],
+  providers: [DonationPaymentsService, OutreachService, MtnService, PixiPayService],
   exports: [OutreachService, MtnService, PixiPayService],
 })
 export class OutreachModule {}

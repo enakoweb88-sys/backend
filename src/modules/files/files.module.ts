@@ -1,19 +1,9 @@
-import { Module } from '@nestjs/common';
-import { MulterModule } from '@nestjs/platform-express';
-import { join } from 'path';
+import { Global, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { FilesController } from './files.controller';
 import { FilesService } from './files.service';
-
-@Module({
-  imports: [
-    PrismaModule,
-    MulterModule.register({
-      dest: join(process.cwd(), 'uploads'),
-    }),
-  ],
-  controllers: [FilesController],
-  providers: [FilesService],
-  exports: [FilesService],
-})
+import { SecureFilesService } from './secure-files.service';
+import { PrivateFilesController } from './private-files.controller';
+@Module({ imports: [PrismaModule], controllers: [FilesController, PrivateFilesController], providers: [FilesService, SecureFilesService], exports: [FilesService, SecureFilesService] })
+@Global()
 export class FilesModule {}

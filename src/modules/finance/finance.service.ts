@@ -7,40 +7,17 @@ export class FinanceService {
 
   async getBanking() {
     const bankAccounts = await this.prisma.bankAccount.findMany();
-    if (bankAccounts.length > 0) return bankAccounts;
-
-    return [
-      { id: 'bank-1', name: 'MTN Mobile Money Corporate Float', bank: 'MTN Cameroon (MoMo API)', accountNo: '671063170', balance: 18500000, currency: 'XAF' },
-      { id: 'bank-2', name: 'Orange Money Merchant Settlement', bank: 'Orange Cameroun', accountNo: '699112233', balance: 14200000, currency: 'XAF' },
-      { id: 'bank-3', name: 'Ecobank Corporate Treasury Account', bank: 'Ecobank Cameroon', accountNo: 'CM21 10023 0001', balance: 45000000, currency: 'XAF' },
-      { id: 'bank-4', name: 'UBA Foreign Currency Reserve', bank: 'United Bank for Africa', accountNo: 'CM21 10033 0002', balance: 12500000, currency: 'USD' },
-    ];
+    return bankAccounts;
   }
 
   async getBudget() {
     const budgets = await this.prisma.budget.findMany();
-    if (budgets.length > 0) return budgets;
-
-    return [
-      { category: 'Software & Cloud Infrastructure', budget: 5000000, actual: 3850000 },
-      { category: 'Employee Salaries & Payroll', budget: 15000000, actual: 14200000 },
-      { category: 'Marketing & Digital Ads', budget: 3000000, actual: 2450000 },
-      { category: 'Staff Welfare & Meals', budget: 1200000, actual: 950000 },
-      { category: 'Legal & Compliance Fees', budget: 2000000, actual: 1500000 },
-    ];
+    return budgets;
   }
 
   async getCashPosition() {
-    const now = new Date();
-    const chartData = [
-      { name: 'Mon', Inflow: 4200000, Outflow: 1800000 },
-      { name: 'Tue', Inflow: 5800000, Outflow: 2400000 },
-      { name: 'Wed', Inflow: 3900000, Outflow: 1500000 },
-      { name: 'Thu', Inflow: 6500000, Outflow: 3100000 },
-      { name: 'Fri', Inflow: 7200000, Outflow: 2900000 },
-      { name: 'Sat', Inflow: 2100000, Outflow: 800000 },
-      { name: 'Sun', Inflow: 1900000, Outflow: 600000 },
-    ];
+    const transactions = await this.prisma.transaction.findMany({ where: { status: 'SETTLED', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, select: { createdAt: true, type: true, amountInXaf: true, amount: true } });
+    const chartData = Array.from({ length: 7 }, (_, i) => { const date = new Date(Date.now() - (6 - i) * 86400000).toISOString().slice(0, 10); const records = transactions.filter(tx => tx.createdAt.toISOString().startsWith(date)); return { name: date, Inflow: records.filter(tx => ['Receive', 'Income', 'CREDIT'].includes(tx.type)).reduce((sum, tx) => sum + Number(tx.amountInXaf ?? tx.amount), 0), Outflow: records.filter(tx => ['Send', 'Expense', 'DEBIT'].includes(tx.type)).reduce((sum, tx) => sum + Number(tx.amountInXaf ?? tx.amount), 0) }; });
     return { chartData };
   }
 
@@ -55,11 +32,7 @@ export class FinanceService {
         pending: all.filter(i => i.status === 'Pending').reduce((a, b) => a + Number(b.amount), 0),
         overdue: all.filter(i => i.status === 'Overdue').reduce((a, b) => a + Number(b.amount), 0),
       },
-      recent: recent.length > 0 ? recent : [
-        { id: 'INV-2026-001', client: 'Afriland First Bank (B2B Settlement)', amount: 4500000, status: 'Paid', date: new Date() },
-        { id: 'INV-2026-002', client: 'MTN Mobile Money Merchant Payout', amount: 8200000, status: 'Paid', date: new Date() },
-        { id: 'INV-2026-003', client: 'Orange Money Partner Fees', amount: 2100000, status: 'Pending', date: new Date() },
-      ]
+      recent
     };
   }
 
@@ -91,13 +64,13 @@ export class FinanceService {
 
     return {
       assets,
-      liabilities: 1250000,
-      equity: assets - 1250000,
+      liabilities: null,
+      equity: null,
       revenueYtd,
       expensesYtd,
       netProfit,
-      settlementAccuracy: '99.94%',
-      reconciliationRate: '99.98%',
+      settlementAccuracy: null,
+      reconciliationRate: null,
       cashPositionXaf: assets,
       mealsTotalCost: Number(meals._sum.totalAmount || 0),
       mealsCompanyPays: Number(meals._sum.companyAmount || 0),
