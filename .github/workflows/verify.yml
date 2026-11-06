@@ -27,4 +27,6 @@ jobs:
       - run: npm run verify
       - run: node scripts/dependency-audit.cjs --production
       - run: npm audit --audit-level=high
+      - run: docker build --tag enako-backend-verification .
+      - run: docker run --rm --entrypoint sh enako-backend-verification -c 'clamd --version && freshclam --version && test "$(id -u)" != "0"'
 # Verification only. No hosting tokens, deployment commands or production jobs.

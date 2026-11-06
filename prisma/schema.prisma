@@ -1141,8 +1141,8 @@ enum OutreachEventType {
 enum OutreachEventStatus {
   DRAFT
   OPEN
-  SCHEDULED
   CLOSED
+  SCHEDULED
 }
 
 enum ApplicationLevel {

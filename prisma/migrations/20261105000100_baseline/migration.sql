@@ -41,7 +41,7 @@ CREATE TYPE "PaymentMethod" AS ENUM ('MTN', 'ORANGE', 'BANK');
 CREATE TYPE "OutreachEventType" AS ENUM ('SCHOLARSHIP', 'FUNDRAISER');
 
 -- CreateEnum
-CREATE TYPE "OutreachEventStatus" AS ENUM ('DRAFT', 'OPEN', 'SCHEDULED', 'CLOSED');
+CREATE TYPE "OutreachEventStatus" AS ENUM ('DRAFT', 'OPEN', 'CLOSED', 'SCHEDULED');
 
 -- CreateEnum
 CREATE TYPE "ApplicationLevel" AS ENUM ('PRIMARY', 'SECONDARY', 'UNIVERSITY', 'NONE');

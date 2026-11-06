@@ -31,3 +31,4 @@ logs/
 .cache/
 .test-runtime/
 coverage/
+.private-backups/

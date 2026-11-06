@@ -1,5 +1,7 @@
 # ENAKO backend production cutover plan
 
+Execution update: the owner subsequently authorized backups, database preparation and production publication, while retaining Render and ownership handling. See [production-release-2026-11-06.md](production-release-2026-11-06.md) for actual completed work and remaining operator settings. The original plan below is retained as preparation history.
+
 Prepared 2026-11-05. **PLAN ONLY — NOT CLEARED FOR EXECUTION.** The user confirmed production prerequisites are not prepared. No production queries, customer-record access, migrations, configuration updates, commits, pushes or deployments were performed while preparing this plan.
 
 This plan covers the entire local backend release, including the health endpoint. It does not authorize changing production records, provisioning identities, changing hosting settings or publishing frontends. Those steps require review of the concrete staging results and migration/mapping artifacts first. Existing deployment authorization can be used once these prerequisites and the confirmed deployment target are ready; another generic approval to deploy code is unnecessary.

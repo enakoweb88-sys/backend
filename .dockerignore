@@ -6,6 +6,7 @@ npm-debug.log
 .env.*.local
 .env.*
 .test-runtime
+.private-backups
 
 dist
 build

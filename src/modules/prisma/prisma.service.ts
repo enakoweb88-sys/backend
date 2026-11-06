@@ -1,8 +1,14 @@
 import { INestApplication, Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { secureDatabaseUrl } from '../../common/database-connection';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
+  constructor() {
+    const url = secureDatabaseUrl(process.env.DATABASE_URL);
+    super(url ? { datasources: { db: { url } } } : undefined);
+  }
+
   async onModuleInit() {
     await this.$connect();
     const roles = await this.$queryRaw<Array<{ name: string; unsafe: boolean }>>`
