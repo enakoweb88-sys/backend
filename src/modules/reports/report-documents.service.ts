@@ -1,6 +1,7 @@
 import { previewMimeType, attachmentDisposition } from '../../common/document-content';
 export { previewMimeType, attachmentDisposition } from '../../common/document-content';
 import { SecureFilesService } from '../files/secure-files.service';
+import { assertNonExecutableDocument } from '../../common/upload-validation';
 import {
   BadRequestException,
   ForbiddenException,
@@ -87,7 +88,10 @@ export class ReportDocumentsService {
         throw new BadRequestException("Invalid retained document list");
       retained = [...new Set(retained)];
     }
-    for (const file of files) await this.secureFiles.scan(file.buffer);
+    for (const file of files) {
+      assertNonExecutableDocument(file.originalname, file.buffer);
+      await this.secureFiles.scan(file.buffer);
+    }
     const newDocuments = files.map((file) => ({
       originalName:
         file.originalname

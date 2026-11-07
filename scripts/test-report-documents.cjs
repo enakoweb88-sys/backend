@@ -8,7 +8,7 @@ const { ReportsController } = require('../src/modules/reports/reports.controller
 const user = { sub: 'engineer', role: 'EMPLOYEE' };
 const file = (name, bytes = Buffer.from('%PDF-1.7\noriginal binary\0data'), mimetype = 'application/pdf') => ({ originalname: name, buffer: bytes, size: 999999999, mimetype });
 
-function fixture(existing = null) {
+function fixture(existing = null, secureFiles = { scan: async () => {} }) {
   const documents = [], notifications = [], reports = existing ? [existing] : [];
   let sequence = 0;
   const metadata = document => Object.fromEntries(Object.keys(reportDocumentMetadata).map(key => [key, document[key]]));
@@ -27,7 +27,7 @@ function fixture(existing = null) {
     notifyReviewers: async (_tx, report) => notifications.push(report.id),
     findDaily: async (id, caller) => { const report = reports.find(row => row.id === id && (row.userId === caller.sub || caller.role === 'MANAGER' && row.status !== 'DRAFT' || caller.role === 'CEO' && row.status === 'VERIFIED')); if (!report) throw new Error('Report not found'); return result(report); },
   };
-  return { service: new ReportDocumentsService(prisma, reportService, { scan: async () => {} }), documents, notifications, reports };
+  return { service: new ReportDocumentsService(prisma, reportService, secureFiles), documents, notifications, reports };
 }
 
 test('original binary and metadata are persisted together; report responses exclude bytes', async () => {
@@ -41,6 +41,18 @@ test('original binary and metadata are persisted together; report responses excl
   assert.equal(f.notifications.length, 1);
   const downloaded = await f.service.read(saved.id, saved.documents[0].id, { sub: 'boss', role: 'MANAGER' });
   assert.deepEqual(downloaded.data, uploaded.buffer);
+});
+
+test('report PDFs remain uploadable and downloadable with the explicitly disabled scanner', async () => {
+  const { SecureFilesService } = require('../src/modules/files/secure-files.service.ts');
+  const f = fixture(null, new SecureFilesService({}, { get: key => key === 'FILE_SCANNER_EMBEDDED' ? 'false' : undefined }));
+  const uploaded = file('Weekly.pdf');
+  const saved = await f.service.save({ title: 'Weekly report' }, [uploaded], user);
+  const downloaded = await f.service.read(saved.id, saved.documents[0].id, { sub: 'boss', role: 'MANAGER' });
+  assert.deepEqual(downloaded.data, uploaded.buffer);
+  await assert.rejects(f.service.read(saved.id, saved.documents[0].id, { sub: 'other', role: 'EMPLOYEE' }));
+  for (const uploaded of [file('run.exe'), file('disguised.pdf', Buffer.from('MZfixture')), file('page.html')]) await assert.rejects(f.service.save({ title: 'Unsafe document' }, [uploaded], user), /Executable content/);
+  assert.equal(f.documents.length, 1);
 });
 test('Word, spreadsheets, archives and arbitrary binary formats are accepted without changing original bytes', async () => {
   const f = fixture();

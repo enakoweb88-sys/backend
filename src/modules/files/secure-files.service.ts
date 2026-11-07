@@ -1,4 +1,4 @@
-import { scanDocument } from '../../common/document-scanner';
+import { readableDocumentScanStatus, scanDocument } from '../../common/document-scanner';
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'crypto';
@@ -23,8 +23,8 @@ export class SecureFilesService {
   }
   async scan(bytes: Buffer) { return scanDocument(bytes, this.config); }
   async prepare(file: Express.Multer.File, scope: string, ownerId?: string, restricted = false) {
-    const validated = safeUpload(file, restricted); await this.scan(file.buffer);
-    return { id: randomUUID(), ownerId, scope, fileName: file.originalname, mimeType: validated.mimeType, size: file.size, sha256: createHash('sha256').update(file.buffer).digest('hex'), data: file.buffer, scanStatus: 'CLEAN', expiresAt: new Date(Date.now() + 86400000) };
+    const validated = safeUpload(file, restricted); const scanStatus = await this.scan(file.buffer);
+    return { id: randomUUID(), ownerId, scope, fileName: file.originalname, mimeType: validated.mimeType, size: file.size, sha256: createHash('sha256').update(file.buffer).digest('hex'), data: file.buffer, scanStatus, expiresAt: new Date(Date.now() + 86400000) };
   }
   async save(file: Express.Multer.File, scope: string, ownerId: string, restricted = false) {
     const saved = await this.prisma.secureFile.create({ data: await this.prepare(file, scope, ownerId, restricted) });
@@ -33,7 +33,7 @@ export class SecureFilesService {
   async attach(id: string, parentId: string) { await this.prisma.secureFile.update({ where: { id }, data: { parentId, expiresAt: null } }); }
   async read(id: string, user: { sub: string; role: string; cashLevel?: string }) {
     const file = await this.prisma.secureFile.findUnique({ where: { id } });
-    if (!file || file.scanStatus !== 'CLEAN' || (file.expiresAt && file.expiresAt <= new Date())) throw new NotFoundException('Document unavailable');
+    if (!file || !readableDocumentScanStatus(file.scanStatus, this.config) || (file.expiresAt && file.expiresAt <= new Date())) throw new NotFoundException('Document unavailable');
     let allowed = false;
     if (!user.cashLevel && file.scope !== 'cash') allowed = file.scope === 'kyc' ? ['CEO', 'MANAGER'].includes(user.role) : file.scope === 'donation' ? ['CEO', 'MANAGER', 'OUTREACH_MANAGER'].includes(user.role) : file.ownerId === user.sub || ['CEO', 'MANAGER'].includes(user.role);
     if (!allowed) throw new NotFoundException('Document unavailable');

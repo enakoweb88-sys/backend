@@ -4,6 +4,13 @@ This is the current execution record. Earlier preflight/cutover documents descri
 
 Publication preparation continued on 2026-11-07 (Africa/Douala).
 
+Upload-policy correction on 2026-11-07: the owner explicitly requested keeping
+KYC/report uploads available on Render Free without antivirus hosting. The
+follow-up release permits validated, explicitly unscanned uploads with
+`FILE_SCANNER_EMBEDDED=false` in auto mode. Required-scanner mode still rejects
+outages. This supersedes the scanner-related upload-blocking instructions below;
+see `upload-availability-2026-11-07.md`. Unscanned does not mean malware-free.
+
 ## Database work actually completed
 
 - Created an AES-256-GCM encrypted, consistent PostgreSQL database archive, protected by Windows DPAPI for the current Windows account. Its directory permits the current account and SYSTEM, and is excluded from Git and Docker build context.

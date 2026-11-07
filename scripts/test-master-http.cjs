@@ -44,6 +44,8 @@ async function main() {
     // No environment files or remote credentials can enter the test application.
     for (const key of Object.keys(process.env)) if (/SMTP|RESEND|SUPABASE|MTN_|PIX|CASH_|JWT_|CF_ACCESS|OS_PERMISSION|ENAKO_API|ENAKO_AI/.test(key)) delete process.env[key];
     Object.assign(process.env, { NODE_ENV: 'test', DATABASE_URL: runtimeUrl.href, DIRECT_URL: runtimeUrl.href, JWT_ACCESS_SECRET: randomBytes(48).toString('hex'), JWT_REFRESH_SECRET: randomBytes(48).toString('hex'), JWT_ISSUER: 'fixture', JWT_AUDIENCE: 'fixture-os', CASH_JWT_SECRET: randomBytes(48).toString('hex'), CASH_ACCESS_GRANTS: JSON.stringify({ [cashUsers.collector.id]: 'operator', [cashUsers.admin.id]: 'administrator' }), RATE_LIMIT_HASH_SECRET: randomBytes(48).toString('hex'), GATEWAY_ACCESS_MODE: 'local-only', CORS_ORIGIN: 'http://127.0.0.1:3000' });
+    process.env.FILE_SCANNER_MODE = 'required';
+    delete process.env.FILE_SCANNER_EMBEDDED;
     process.chdir(isolated);
     const { AppModule } = require('../src/app.module.ts'), { PrismaService } = require('../src/modules/prisma/prisma.service.ts'), { MailService } = require('../src/modules/mail/mail.service.ts');
     const mail = new Proxy({}, { get: (_target, name) => name === 'then' ? undefined : async () => ({ success: true, messageId: 'mock-fixture' }) });
@@ -139,7 +141,28 @@ async function main() {
         delete process.env.FILE_SCANNER_HOST;
         assert.equal((await fetch(base + '/api/v1/kyc/submissions', { method: 'POST', body: form() })).status, 503);
         assert.equal(await prisma.kycSubmission.count(), 1);
-      } finally { delete process.env.FILE_SCANNER_HOST; delete process.env.FILE_SCANNER_PORT; await new Promise(resolve => scanner.close(resolve)); }
+        process.env.FILE_SCANNER_MODE = 'auto'; process.env.FILE_SCANNER_EMBEDDED = 'false';
+        const unscannedOs = await fetch(base + '/api/v1/kyc/submissions', { method: 'POST', body: form() });
+        assert.equal(unscannedOs.status, 201); const unscannedOsSubmission = await unscannedOs.json();
+        const unscannedOsFile = await prisma.secureFile.findFirst({ where: { parentId: unscannedOsSubmission.id } });
+        assert.equal(unscannedOsFile.scanStatus, 'UNSCANNED');
+        const osDownload = await fetch(base + '/api/v1/files/private/' + unscannedOsFile.id, { headers: { Authorization: 'Bearer ' + tokens.ceo } });
+        assert.equal(osDownload.status, 200); assert.deepEqual(Buffer.from(await osDownload.arrayBuffer()), bytes);
+        assert.equal((await call('/files/private/' + unscannedOsFile.id, 'GET', undefined, tokens.engineer)).status, 404);
+        const unscannedCash = await fetch(base + '/api/v1/cash-kyc/submissions', { method: 'POST', body: form() });
+        assert.equal(unscannedCash.status, 201); const unscannedCashSubmission = await unscannedCash.json();
+        const unscannedCashFile = await prisma.cashDocument.findFirst({ where: { parentId: unscannedCashSubmission.id } });
+        assert.equal(unscannedCashFile.scanStatus, 'UNSCANNED');
+        const cashUnscannedDownload = await fetch(base + '/api/v1/cash-collections/documents/' + unscannedCashFile.id, { headers: { Authorization: 'Bearer ' + cashLogin.data.accessToken } });
+        assert.equal(cashUnscannedDownload.status, 200); assert.deepEqual(Buffer.from(await cashUnscannedDownload.arrayBuffer()), bytes);
+        assert.equal((await call('/cash-collections/documents/' + unscannedCashFile.id, 'GET', undefined, tokens.ceo)).status, 401);
+        const reportForm = new FormData(); reportForm.append('title', 'Scanner-disabled fixture report'); reportForm.append('documents', new Blob([bytes], { type: 'application/pdf' }), 'fixture.pdf');
+        const reportUpload = await fetch(base + '/api/v1/reports/daily/upload', { method: 'POST', body: reportForm, headers: { Authorization: 'Bearer ' + tokens.engineer } });
+        assert.equal(reportUpload.status, 201); const report = await reportUpload.json();
+        const reportDownload = await fetch(base + '/api/v1/reports/daily/' + report.id + '/documents/' + report.documents[0].id, { headers: { Authorization: 'Bearer ' + tokens.manager } });
+        assert.equal(reportDownload.status, 200); assert.deepEqual(Buffer.from(await reportDownload.arrayBuffer()), bytes);
+        assert.equal(await prisma.kycSubmission.count(), 2); assert.equal(await prisma.cashKycSubmission.count(), 2);
+      } finally { delete process.env.FILE_SCANNER_HOST; delete process.env.FILE_SCANNER_PORT; delete process.env.FILE_SCANNER_EMBEDDED; process.env.FILE_SCANNER_MODE = 'required'; await new Promise(resolve => scanner.close(resolve)); }
     });
     await check('same-office users have independent login budgets and forwarded headers cannot bypass account limits', async () => {
       for (let i = 0; i < 5; i++) assert.equal((await call('/auth/login', 'POST', { email: 'absent@fixture.invalid', password })).status, 401);

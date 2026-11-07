@@ -11,6 +11,7 @@ const { generateKeyPairSync, randomBytes } = require('node:crypto');
 const net = require('node:net');
 const axios = require('axios');
 const { GatewayAccess } = require('../src/common/gateway-access.ts');
+const { scanDocument, readableDocumentScanStatus } = require('../src/common/document-scanner.ts');
 const { corsAllowlist, trustedProxies } = require('../src/common/request-security.ts');
 const { SecureFilesService, safeUpload } = require('../src/modules/files/secure-files.service.ts');
 const { CommunicationsGateway } = require('../src/modules/communications/communications.gateway.ts');
@@ -65,10 +66,33 @@ test('ClamAV INSTREAM verifies clean, rejects infected and fails closed without 
     });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const service = new SecureFilesService({}, new ConfigService({ FILE_SCANNER_HOST: '127.0.0.1', FILE_SCANNER_PORT: String(server.address().port) }));
-  try { await service.scan(Buffer.from('fixture-document')); infected = true; await assert.rejects(service.scan(Buffer.from('fixture-document')), /failed security scanning/); }
+  const service = new SecureFilesService({}, new ConfigService({ FILE_SCANNER_MODE: 'required', FILE_SCANNER_EMBEDDED: 'false', FILE_SCANNER_HOST: '127.0.0.1', FILE_SCANNER_PORT: String(server.address().port) }));
+  try { assert.equal(await service.scan(Buffer.from('fixture-document')), 'CLEAN'); infected = true; await assert.rejects(service.scan(Buffer.from('fixture-document')), /failed security scanning/); }
   finally { await new Promise(resolve => server.close(resolve)); }
   await assert.rejects(new SecureFilesService({}, new ConfigService({})).scan(Buffer.from('fixture')), /not configured/);
+});
+
+test('explicit no-scanner policy permits validated documents without falsely marking them clean', async () => {
+  const config = new ConfigService({ FILE_SCANNER_EMBEDDED: 'false' });
+  const buffer = Buffer.from('%PDF-1.7\nfixture-document');
+  const file = { buffer, size: buffer.length, originalname: 'fixture.pdf' };
+  const service = new SecureFilesService({}, config);
+  const prepared = await service.prepare(file, 'kyc', undefined, true);
+  assert.equal(prepared.scanStatus, 'UNSCANNED');
+  assert.equal(readableDocumentScanStatus('UNSCANNED', config), true);
+  assert.equal(readableDocumentScanStatus('CLEAN', config), true);
+  for (const status of ['INFECTED', 'PENDING', 'FAILED']) assert.equal(readableDocumentScanStatus(status, config), false);
+  for (const originalname of ['fixture.exe', 'vector.svg', '../fixture.pdf']) await assert.rejects(service.prepare({ ...file, originalname }, 'kyc', undefined, true));
+  const fake = Buffer.from('<html>not a PDF</html>');
+  await assert.rejects(service.prepare({ ...file, buffer: fake, size: fake.length }, 'kyc', undefined, true));
+  assert.equal(readableDocumentScanStatus('UNSCANNED', new ConfigService({ FILE_SCANNER_MODE: 'required' })), false);
+});
+
+test('required, missing or invalid scanner configuration never silently permits an upload', async () => {
+  for (const config of [new ConfigService({}), new ConfigService({ FILE_SCANNER_MODE: 'required', FILE_SCANNER_EMBEDDED: 'false' }), new ConfigService({ FILE_SCANNER_MODE: 'typo' })]) {
+    await assert.rejects(scanDocument(Buffer.from('fixture'), config), error => error.getStatus() === 503);
+  }
+  assert.equal(await scanDocument(Buffer.from('fixture'), new ConfigService({ FILE_SCANNER_MODE: 'disabled' })), 'UNSCANNED');
 });
 
 test('WebSocket identity, room membership, revocation and event limits are enforced', async () => {

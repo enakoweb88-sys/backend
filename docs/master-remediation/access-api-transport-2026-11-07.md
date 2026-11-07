@@ -2,9 +2,13 @@
 
 ## Owner's release decision
 
-The owner retained Render Free and explicitly deferred scanner hosting. Keep
-`FILE_SCANNER_EMBEDDED=false`; uploads remain fail-closed with 503 until a working
-scanner is provisioned. Do not bypass scanning to make uploads appear functional.
+The owner retained Render Free and explicitly deferred scanner hosting. After
+clarifying the impact on client KYC, the owner requested validated uploads remain
+available without antivirus. The follow-up upload-availability correction now
+interprets explicit `FILE_SCANNER_EMBEDDED=false` in auto mode as unscanned
+operation. Files are marked `UNSCANNED`, never `CLEAN`. Required-scanner mode
+continues to reject outages. See `upload-availability-2026-11-07.md` for the current
+policy; it supersedes the earlier fail-closed-only handoff for this deployment.
 The owner reports the separate OS API/chat and Cash API Worker routes installed,
 with workers.dev/preview URLs disabled. Live authenticated verification remains
 pending. Render's dashboard reports older commit `211668e` live; the production
