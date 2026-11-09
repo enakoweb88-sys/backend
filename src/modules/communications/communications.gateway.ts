@@ -8,6 +8,7 @@ import { CommunicationsService } from './communications.service';
 import { GatewayAccess } from '../../common/gateway-access';
 import { PostgresThrottlerStorage } from '../../common/postgres-throttler';
 import { corsAllowlist } from '../../common/request-security';
+import { matchesOsGatewayIdentity } from '../../common/os-gateway-identity';
 
 @WebSocketGateway({ cors: { origin: (origin, callback) => { try { callback(null, !origin || corsAllowlist(new ConfigService()).includes(origin)); } catch { callback(new Error('Origin rejected')); } }, credentials: false }, maxHttpBufferSize: 16384, transports: ['websocket'] })
 export class CommunicationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -27,7 +28,7 @@ export class CommunicationsGateway implements OnGatewayConnection, OnGatewayDisc
   private async principal(client: Socket) {
     if (typeof client.data.token !== 'string') throw Error('Authentication required');
     const user = await this.auth.validateAccessToken(client.data.token);
-    if (client.data.gateway && (client.data.gateway.expiresAt <= Date.now() || client.data.gateway.email !== user.email.toLowerCase())) throw Error('Gateway session expired');
+    if (client.data.gateway && (client.data.gateway.expiresAt <= Date.now() || !matchesOsGatewayIdentity(user, client.data.gateway.email))) throw Error('Gateway session expired');
     return user;
   }
   private async revalidateRooms(client: Socket) {

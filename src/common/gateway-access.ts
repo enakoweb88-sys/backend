@@ -68,10 +68,7 @@ export class GatewayAccessGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const app = context.getClass().name.startsWith('Cash') ? 'cash' : 'os';
     req.gatewayIdentity = await this.gateway.verify(req.headers['cf-access-jwt-assertion'], app, req.socket.remoteAddress);
-    if (app === 'os' && req.gatewayIdentity && context.getHandler().name === 'login') {
-      const email = String(req.body?.email || req.body?.identifier || '').trim().toLowerCase();
-      if (email !== req.gatewayIdentity.email) throw new UnauthorizedException('Gateway and application identities must match');
-    }
+    // OS login binds the verified gateway identity to the authenticated account in AuthService.
     return true;
   }
 }

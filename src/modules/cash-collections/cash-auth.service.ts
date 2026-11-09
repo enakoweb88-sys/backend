@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CashAccessPolicy, CashPrincipal } from './cash-access';
+import { matchesCashGatewayIdentity } from './cash-gateway-identity';
 
 const ISSUER = 'enako-cash';
 const AUDIENCE = 'enako-cash-dashboard';
@@ -50,7 +51,7 @@ export class CashAuthService {
       await this.prisma.cashAuditLog.create({ data: { action: 'CASH_LOGIN_FAILED', entity: 'cash_session' } });
       throw new UnauthorizedException('Invalid cash credentials or access not provisioned');
     }
-    if (gatewayEmail && user.email.toLowerCase() !== gatewayEmail) throw new UnauthorizedException('Gateway and application identities must match');
+    if (gatewayEmail && !matchesCashGatewayIdentity(user, gatewayEmail)) throw new UnauthorizedException('Gateway and application identities must match');
     const cashLevel = this.policy.require({ sub: user.id }, 'session');
     const sid = randomUUID();
     const accessToken = await this.jwt.signAsync({ sub: user.id, sid, app: 'cash', v: user.passwordChangedAt?.getTime() ?? null }, { secret, algorithm: 'HS256', issuer: ISSUER, audience: AUDIENCE, expiresIn: TTL_SECONDS });

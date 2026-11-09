@@ -15,7 +15,7 @@ export class AuthController {
   login(@Body() dto: LoginDto, @Req() req: Request) {
     const ip = req.ip || req.connection.remoteAddress;
     const device = req.headers['user-agent'];
-    return this.auth.login(dto, ip, device);
+    return this.auth.login(dto, ip, device, (req as any).gatewayIdentity?.email);
   }
 
   @Post('refresh')

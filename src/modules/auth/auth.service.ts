@@ -11,6 +11,7 @@ import { isCashOnlyAccount } from '../../common/application-boundary';
 import { jwtSettings } from '../../common/security-config';
 import { serializable } from '../../common/serializable';
 import { PermissionPolicy } from '../../common/permissions';
+import { matchesOsGatewayIdentity } from '../../common/os-gateway-identity';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const dummyHash = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
@@ -24,7 +25,7 @@ export class AuthService {
   private accountValid(user: any) { return !!user && user.status === 'ACTIVE' && !isCashOnlyAccount(user.responsibilities); }
   private version(value: Date | null | undefined) { return value?.getTime() ?? null; }
 
-  async login(dto: LoginDto, ip?: string, device?: string) {
+  async login(dto: LoginDto, ip?: string, device?: string, gatewayEmail?: string) {
     const found = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() }, include: userInclude });
     const valid = await bcrypt.compare(dto.password, found?.passwordHash?.startsWith('$2') ? found.passwordHash : dummyHash);
     if (!this.accountValid(found) || !valid || Buffer.byteLength(dto.password) > 72) {
@@ -35,6 +36,7 @@ export class AuthService {
     return serializable(this.prisma, async tx => {
       const user = await tx.user.findUnique({ where: { id: found!.id }, include: userInclude });
       if (!this.accountValid(user) || user!.passwordHash !== found!.passwordHash) throw new UnauthorizedException('Invalid credentials');
+      if (gatewayEmail && !matchesOsGatewayIdentity(user!, gatewayEmail)) throw new UnauthorizedException('Gateway and application identities must match');
       const session = await tx.authSession.create({ data: { id: randomUUID(), userId: user!.id, roleAtIssue: user!.role.name, passwordVersion: user!.passwordChangedAt, expiresAt: new Date(Date.now() + settings.refreshSeconds * 1000), device: device?.slice(0, 200), ipAddress: ip?.slice(0, 100) } });
       await tx.user.update({ where: { id: user!.id }, data: { lastLoginAt: new Date() } });
       await tx.userSession.create({ data: { id: session.id, userId: user!.id } });
@@ -65,7 +67,7 @@ export class AuthService {
       const record = await tx.refreshToken.findUnique({ where: { id: claims.jti }, include: { authSession: { include: { user: { include: userInclude } } } } });
       if (!record || record.tokenHash !== digest(refreshToken) || record.userId !== claims.sub || record.authSessionId !== claims.sid) return { error: true };
       const session = record.authSession, user = session?.user;
-      if (gatewayEmail && user?.email.toLowerCase() !== gatewayEmail.toLowerCase()) return { error: true };
+      if (gatewayEmail && (!user || !matchesOsGatewayIdentity(user, gatewayEmail))) return { error: true };
       if (record.usedAt) {
         await tx.authSession.updateMany({ where: { id: claims.sid }, data: { revokedAt: new Date() } });
         await tx.refreshToken.updateMany({ where: { authSessionId: claims.sid, revokedAt: null }, data: { revokedAt: new Date() } });
