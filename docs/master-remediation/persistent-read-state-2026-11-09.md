@@ -1,0 +1,11 @@
+# Persistent OS message and notification read status
+
+The unread messages shortcut previously loaded ordinary channel history. Its mark-read and reply controls changed browser state only. Chat channel badges also relied on local state. Notification controls could suppress a failed save and display an item as read without confirmation, while overlapping refresh responses could restore older badge state.
+
+OS now stores per-user, per-message receipts in `message_read_receipts`, protected by backend authentication, channel authorization and database RLS. Reading one employee's inbox does not change another employee's inbox. GET `/messages/unread` filters by accessible channels, excludes the user's own messages and excludes saved receipts. PATCH `/messages/read` accepts only explicitly displayed message IDs, up to 200 per request, and rejects IDs outside the authorized channel. Unread retrieval is bounded at 200 messages; marking the displayed batch reveals any remaining unread messages on refresh.
+
+Chat saves loaded messages only while the page is visible and retries failed saves. The unread shortcut opens the real conversation for replies and persists mark-read actions. It does not auto-mark messages merely by loading the unread preview list. Notification read changes are owner-scoped and idempotent. Clients publish a refresh event only after a successful save, reject stale pre-save polling responses, and show a failure instead of claiming success. Read notifications remain in notification history.
+
+Apply Prisma migration `20261109000200_message_read_receipts` before deploying the updated backend and OS frontend. The earlier, locally pending dated-leave migration is also in the migration chain and must be included in a coordinated release. No historical reads are guessed; existing messages without receipts remain unread until the employee reads or explicitly marks them. No production migration, push or deployment was performed for this fix.
+
+Validation: backend unit tests for ownership, receipt deduplication, channel isolation and bounded input; client regression checks for successful and failed read saves; real HTTP integration with a restricted runtime database role verifies saved message and notification reads after fresh authentication, rejection of other users' updates, and genuinely new messages remaining unread.

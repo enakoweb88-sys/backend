@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -105,6 +106,14 @@ export class CommunicationsController {
   }
 
   // --- Messages Endpoints ---
+
+  @Get('messages/unread')
+  unread(@CurrentUser() user: JwtUser) { return this.commsService.unreadMessages(user.sub); }
+
+  @Patch('messages/read')
+  markRead(@Body() body: { channel: string; messageIds: unknown }, @CurrentUser() user: JwtUser) {
+    return this.commsService.markMessagesRead(user.sub, body.channel, body.messageIds);
+  }
 
   @Get("messages")
   async list(

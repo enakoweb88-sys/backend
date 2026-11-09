@@ -22,8 +22,8 @@ export class NotificationsController {
 
   @Get('unread-count')
   @UseGuards(JwtAuthGuard)
-  unreadCount(@CurrentUser() user: JwtUser) {
-    return this.notifications.getUnreadCount(user.sub);
+  async unreadCount(@CurrentUser() user: JwtUser) {
+    return { count: await this.notifications.getUnreadCount(user.sub) };
   }
 
   @Patch(':id/read')

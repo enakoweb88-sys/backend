@@ -34,6 +34,21 @@ async function main() {
     const password = randomBytes(24).toString('hex'), passwordHash = await bcrypt.hash(password, 12);
     const users = {};
     for (const name of Object.keys(roles)) users[name] = await prisma.user.create({ data: { email: name.toLowerCase() + '@fixture.invalid', fullName: name, roleId: roles[name].id, passwordHash } });
+    await test('dated OS leave stores dates and emits durable alerts once across completion workers', async () => {
+      const { AdminService } = require('../src/modules/admin/admin.service.ts');
+      const { LeaveLifecycleService } = require('../src/modules/admin/leave-lifecycle.service.ts');
+      const { ReportAlertsService } = require('../src/modules/reports/report-alerts.service.ts');
+      const alerts = new ReportAlertsService(prisma, {});
+      const service = new AdminService(prisma, alerts);
+      const employee = users.EMPLOYEE;
+      const leave = await service.createLeave({ employeeId: employee.id, type: 'Annual', startDate: '2020-01-01', endDate: '2020-01-02' }, { sub: users.CEO.id, role: 'CEO', email: users.CEO.email });
+      assert.equal(leave.duration, '2 days');
+      assert.equal(await prisma.notification.count({ where: { userId: employee.id, title: 'Leave assigned' } }), 1);
+      await Promise.all([new LeaveLifecycleService(prisma, alerts).finishDueLeaves(), new LeaveLifecycleService(prisma, alerts).finishDueLeaves()]);
+      assert.equal((await prisma.leaveRequest.findUnique({ where: { id: leave.id } })).status, 'Completed');
+      assert.equal(await prisma.notification.count({ where: { userId: employee.id, title: 'Leave finished' } }), 1);
+      assert.equal(await prisma.notificationEmailDelivery.count({ where: { notification: { userId: employee.id } } }), 2);
+    });
     const actor = { sub: users.CEO.id, role: 'CEO', email: users.CEO.email };
     const config = new ConfigService({ JWT_ACCESS_SECRET: randomBytes(48).toString('hex'), JWT_REFRESH_SECRET: randomBytes(48).toString('hex'), JWT_ISSUER: 'fixture', JWT_AUDIENCE: 'fixture-os' });
     const auth = new AuthService(prisma, new JwtService(), config, {}, new PermissionPolicy(config));

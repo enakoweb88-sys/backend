@@ -164,6 +164,32 @@ async function main() {
         assert.equal(await prisma.kycSubmission.count(), 2); assert.equal(await prisma.cashKycSubmission.count(), 2);
       } finally { delete process.env.FILE_SCANNER_HOST; delete process.env.FILE_SCANNER_PORT; delete process.env.FILE_SCANNER_EMBEDDED; process.env.FILE_SCANNER_MODE = 'required'; await new Promise(resolve => scanner.close(resolve)); }
     });
+    await check('message and notification reads survive reauthentication and remain private per employee', async () => {
+      const privateChat = await call('/private-chat', 'POST', { recipientId: users.engineer.id }, tokens.ceo);
+      assert.equal(privateChat.status, 201);
+      const channel = privateChat.data.name;
+      const sent = await call('/messages', 'POST', { channel, content: 'Synthetic read-state verification' }, tokens.ceo);
+      assert.equal(sent.status, 201);
+      let inbox = await call('/messages/unread', 'GET', undefined, tokens.engineer);
+      assert.ok(inbox.data.some(message => message.id === sent.data.id));
+      assert.equal((await call('/messages/read', 'PATCH', { channel, messageIds: [sent.data.id] }, tokens.other)).status, 403);
+      assert.equal((await call('/messages/read', 'PATCH', { channel, messageIds: [sent.data.id] }, tokens.engineer)).status, 200);
+      const notification = await prisma.notification.findFirst({ where: { userId: users.engineer.id, title: 'New private message' }, orderBy: { createdAt: 'desc' } });
+      assert.equal((await call('/notifications/' + notification.id + '/read', 'PATCH', undefined, tokens.other)).status, 404);
+      assert.equal((await call('/notifications/' + notification.id + '/read', 'PATCH', undefined, tokens.engineer)).status, 200);
+      const login = await call('/auth/login', 'POST', { email: users.engineer.email, password }); assert.equal(login.status, 201);
+      const freshToken = login.data.accessToken;
+      inbox = await call('/messages/unread', 'GET', undefined, freshToken);
+      assert.ok(!inbox.data.some(message => message.id === sent.data.id));
+      const notifications = await call('/notifications', 'GET', undefined, freshToken);
+      assert.ok(notifications.data.find(item => item.id === notification.id).readAt);
+      const newMessage = await call('/messages', 'POST', { channel, content: 'New message stays unread' }, tokens.ceo);
+      inbox = await call('/messages/unread', 'GET', undefined, freshToken);
+      assert.ok(inbox.data.some(message => message.id === newMessage.data.id));
+      assert.ok(!inbox.data.some(message => message.id === sent.data.id));
+      assert.equal((await call('/messages/unread')).status, 401);
+      assert.equal((await call('/notifications/unread-count', 'GET', undefined, freshToken)).data.count >= 1, true);
+    });
     await check('same-office users have independent login budgets and forwarded headers cannot bypass account limits', async () => {
       for (let i = 0; i < 5; i++) assert.equal((await call('/auth/login', 'POST', { email: 'absent@fixture.invalid', password })).status, 401);
       const blocked = await fetch(base + '/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '192.0.2.22' }, body: JSON.stringify({ email: 'absent@fixture.invalid', password }) }); assert.equal(blocked.status, 429);

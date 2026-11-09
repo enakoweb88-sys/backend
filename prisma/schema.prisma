@@ -75,6 +75,7 @@ model User {
   reviewedKyc          KycSubmission[]       @relation("ReviewedKyc")
   mealRecords          MealRecord[]
   sentMessages         Message[]             @relation("SentMessages")
+  messageReadReceipts  MessageReadReceipt[]
   notifications        Notification[]
   performanceMetrics   PerformanceMetric[]
   refreshTokens        RefreshToken[]
@@ -507,6 +508,7 @@ model NotificationEmailDelivery {
 }
 
 model Message {
+  readReceipts MessageReadReceipt[]
   reportReferenceId String?
   reportReferenceTitle String?
   id        String   @id @default(cuid())
@@ -519,6 +521,18 @@ model Message {
   @@index([channel, createdAt])
   @@index([senderId])
   @@map("messages")
+}
+
+model MessageReadReceipt {
+  userId String
+  messageId String
+  readAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([userId, messageId])
+  @@index([messageId])
+  @@map("message_read_receipts")
 }
 
 model PerformanceMetric {
@@ -777,10 +791,15 @@ model LeaveRequest {
   type      String
   duration  String
   status    String
+  employeeId String?
+  startDate DateTime? @db.Date
+  endDate DateTime? @db.Date
+  completedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("leave_requests")
+  @@index([status, endDate])
 }
 
 model Subscription {

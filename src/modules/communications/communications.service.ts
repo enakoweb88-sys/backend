@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from "@nestjs/common";
 import { ensurePrivateConversation } from "./private-chat";
 import { PrismaService } from "../prisma/prisma.service";
@@ -11,6 +12,27 @@ import { PrismaService } from "../prisma/prisma.service";
 @Injectable()
 export class CommunicationsService  {
   constructor(private readonly prisma: PrismaService) {}
+
+  async unreadMessages(userId: string) {
+    const channels = await this.getAvailableChannels(userId);
+    return this.prisma.message.findMany({
+      where: { channel: { in: channels.map(channel => channel.name) }, senderId: { not: userId }, readReceipts: { none: { userId } } },
+      include: { sender: { select: { id: true, fullName: true } } },
+      orderBy: { createdAt: 'desc' }, take: 200,
+    });
+  }
+
+  async markMessagesRead(userId: string, channel: string, messageIds: unknown) {
+    if (typeof channel !== 'string' || !Array.isArray(messageIds) || messageIds.length > 200 || messageIds.some(id => typeof id !== 'string' || !id || id.length > 128)) throw new BadRequestException('Provide up to 200 message IDs and a channel');
+    if (!(await this.verifyChannelAccess(channel, userId))) throw new ForbiddenException('Access denied');
+    const ids = [...new Set(messageIds)] as string[];
+    return this.prisma.$transaction(async tx => {
+      const messages = await tx.message.findMany({ where: { id: { in: ids }, channel }, select: { id: true, senderId: true } });
+      if (messages.length !== ids.length) throw new BadRequestException('Messages must belong to the selected channel');
+      await tx.messageReadReceipt.createMany({ data: messages.filter(m => m.senderId !== userId).map(m => ({ userId, messageId: m.id })), skipDuplicates: true });
+      return { success: true };
+    });
+  }
 
   async privateContacts(userId: string) {
     return this.prisma.user.findMany({
