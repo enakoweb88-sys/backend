@@ -16,6 +16,9 @@ export class MealsController {
     return this.meals.list(user);
   }
 
+  @Get('providers')
+  providers() { return this.meals.providers(); }
+
   @Post()
   record(@Body() dto: MealDto, @CurrentUser() user: JwtUser) {
     // Non-managers/executives can ONLY log their own personal meals

@@ -190,6 +190,23 @@ async function main() {
       assert.equal((await call('/messages/unread')).status, 401);
       assert.equal((await call('/notifications/unread-count', 'GET', undefined, freshToken)).data.count >= 1, true);
     });
+    await check('custom catering providers persist with fixed pricing and employee payroll data stays private', async () => {
+      assert.equal((await call('/meals/providers')).status, 401);
+      const own = await call('/meals', 'POST', { employeeId: users.engineer.id, date: '2026-11-08', status: 'ATE', vendor: ' Mami   Fixture ', mealName: 'Beans and plantain', price: 1, companyAmount: 999, employeeAmount: 1 }, tokens.engineer);
+      assert.equal(own.status, 201); assert.equal(own.data.vendor, 'Mami Fixture');
+      assert.equal(Number(own.data.totalAmount), 1000); assert.equal(Number(own.data.companyAmount), 500); assert.equal(Number(own.data.employeeAmount), 500);
+      const other = await call('/meals', 'POST', { employeeId: users.engineer.id, date: '2026-11-08', status: 'ATE', vendor: 'Second Fixture Provider', mealName: 'Rice' }, tokens.other);
+      assert.equal(other.status, 201); assert.equal(other.data.employeeId, users.other.id);
+      const providers = await call('/meals/providers', 'GET', undefined, tokens.engineer);
+      assert.ok(providers.data.includes('Mami Fixture')); assert.ok(providers.data.includes('Second Fixture Provider'));
+      assert.ok(providers.data.every(name => typeof name === 'string'));
+      const personal = await call('/meals', 'GET', undefined, tokens.engineer);
+      assert.ok(personal.data.items.every(meal => meal.employeeId === users.engineer.id));
+      assert.ok(!personal.data.items.some(meal => meal.id === other.data.id));
+      const manager = await call('/meals', 'GET', undefined, tokens.manager);
+      assert.ok(manager.data.items.some(meal => meal.id === other.data.id));
+      assert.equal((await call('/meals', 'POST', { employeeId: users.engineer.id, date: '2026-11-09', status: 'ATE', vendor: 'Other', mealName: 'Rice' }, tokens.engineer)).status, 400);
+    });
     await check('same-office users have independent login budgets and forwarded headers cannot bypass account limits', async () => {
       for (let i = 0; i < 5; i++) assert.equal((await call('/auth/login', 'POST', { email: 'absent@fixture.invalid', password })).status, 401);
       const blocked = await fetch(base + '/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '192.0.2.22' }, body: JSON.stringify({ email: 'absent@fixture.invalid', password }) }); assert.equal(blocked.status, 429);

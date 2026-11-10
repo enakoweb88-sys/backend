@@ -34,7 +34,7 @@ test('admin overview denies ordinary staff before querying HR data',async()=>{
 });
 
 test('manager admin overview returns a safe recent-staff DTO',async()=>{
-  let query;const service=new AdminService({user:{count:async()=>1,findMany:async args=>{query=args;return [raw]}},leaveRequest:{findMany:async()=>[]},kycSubmission:{count:async()=>0}});
+  let query;const service=new AdminService({user:{count:async()=>1,findMany:async args=>{query=args;return [raw]}},leaveRequest:{findMany:async()=>[],count:async()=>0},kycSubmission:{count:async()=>0}});
   const result=await service.getOverview({sub:'fixture',role:'MANAGER'});assertDirectory(result.recentStaff);assert.equal(query.select.passwordHash,undefined);
 });
 

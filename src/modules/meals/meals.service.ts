@@ -8,6 +8,17 @@ import { PrismaService } from '../prisma/prisma.service';
 export class MealsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async providers() {
+    const rows = await this.prisma.mealRecord.findMany({ where: { vendor: { not: null } }, select: { vendor: true }, distinct: ['vendor'], orderBy: { vendor: 'asc' } });
+    const names = new Map<string, string>();
+    for (const row of rows) {
+      const name = row.vendor?.normalize('NFC').trim().replace(/\s+/g, ' ');
+      if (name && name.toLowerCase() !== 'other') names.set(name.toLowerCase(), names.get(name.toLowerCase()) || name);
+    }
+    if (!names.size) names.set('mami chop', 'mami chop');
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }
+
   async list(user: JwtUser) {
     const where = ['CEO', 'MANAGER'].includes(user.role) ? {} : { employeeId: user.sub };
     const items = await this.prisma.mealRecord.findMany({
@@ -24,6 +35,10 @@ export class MealsService {
   }
 
   async record(dto: MealDto, user: JwtUser) {
+    const vendor = (dto.vendor ?? 'mami chop').normalize('NFC').trim().replace(/\s+/g, ' ');
+    const mealName = dto.mealName?.normalize('NFC').trim().replace(/\s+/g, ' ');
+    if (dto.status === MealStatus.ATE && (!vendor || vendor.length > 100 || vendor.toLowerCase() === 'other')) throw new BadRequestException('Enter a catering provider name (up to 100 characters)');
+    if (mealName !== undefined && (!mealName || mealName.length > 150 || mealName.toLowerCase() === 'other')) throw new BadRequestException('Enter a food name (up to 150 characters)');
     const totalAmount = 1000; // Fixed daily delivery price (1,000 FCFA)
     const companyAmount = 500; // 50% paid by company
     const employeeAmount = 500; // 50% paid by employee
@@ -68,9 +83,9 @@ export class MealsService {
               employeeId: dto.employeeId,
               date: targetDate,
               status: dto.status as MealStatus,
-              mealName: dto.mealName,
+              mealName,
               mealTime: dto.mealTime,
-              vendor: dto.vendor || 'mami chop',
+              vendor: dto.status === MealStatus.ATE ? vendor : null,
               notes: dto.notes,
               totalAmount: dto.status === MealStatus.ATE ? totalAmount : 0,
               companyAmount: dto.status === MealStatus.ATE ? companyAmount : 0,
